@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import Maintenance from '../components/Maintenance.astro';
+import { readAll } from '../../../schema/read.js';
+const content = readAll();
+---
+{content.status.maintenance ? <Maintenance content={content} path="/404" /> : (
+<Base settings={content.settings} title={`Page not found · ${content.profile.name}`} noindex path="/404">
+  <div class="hold">
+    <h1 class="name">Page not found</h1>
+    <p class="msg">This page doesn't exist, or it has moved.</p>
+    <ul class="links"><li><a href="/">← Back to {content.profile.name}</a></li></ul>
+  </div>
+</Base>
+)}

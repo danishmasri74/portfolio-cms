@@ -1,0 +1,18 @@
+---
+import Base from '../layouts/Base.astro';
+import Identity from './Identity.astro';
+const { content, path = '/' } = Astro.props;
+const { profile, status, settings } = content;
+const links = status.showLinks ? profile.links.filter((l) => l.show) : [];
+---
+<Base settings={settings} noindex path={path}>
+  <div class="hold">
+    <Identity profile={profile} showPhoto={status.showPhoto} details={false} />
+    <p class="msg">{status.message}</p>
+    <ul class="links">
+      {status.showEmail && profile.email.value && <li class="plain">{profile.email.value}</li>}
+      {status.showResume && profile.resume.src && <li><a href={profile.resume.src}>Résumé ↓</a></li>}
+      {links.map((l) => <li><a href={l.url} rel="me noopener">{l.label} ↗</a></li>)}
+    </ul>
+  </div>
+</Base>

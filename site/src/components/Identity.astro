@@ -1,0 +1,24 @@
+---
+// Photo + name + role. Shared by the home page and the maintenance page.
+const { profile, showPhoto = true, details = true } = Astro.props;
+import { responsive } from '../../../schema/images.js';
+const p = profile.photo;
+const img = await responsive(p.src);
+const initials = profile.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const order = ['location', 'pronouns', 'timezone', 'languages', 'learning', 'phone'];
+const detailLine = order
+  .map((k) => profile.details[k])
+  .filter((d) => d.show && d.value)
+  .map((d) => d.value)
+  .join(' · ');
+---
+<div class="id">
+  {showPhoto && (p.src
+    ? <img class="photo" src={p.src} srcset={img.srcset} sizes="(max-width: 860px) 72px, 112px" alt={profile.name} width="112" height="112" decoding="async" style={`object-position:${p.focusX}% ${p.focusY}%`} />
+    : <div class="photo blank" aria-hidden="true">{initials}</div>)}
+  <div>
+    <h1 class="name">{profile.name}</h1>
+    <p class="role">{profile.role}</p>
+    {details && detailLine && <p class="details">{detailLine}</p>}
+  </div>
+</div>

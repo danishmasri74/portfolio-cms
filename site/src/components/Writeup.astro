@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import { marked } from 'marked';
+import { responsive, enhanceHtmlImages } from '../../../schema/images.js';
+const { settings, profile, entry, meta, cover, path } = Astro.props;
+const html = await enhanceHtmlImages(marked.parse(entry.writeupText || '', { async: false }), '(max-width: 760px) 100vw, 720px');
+const coverImg = await responsive(cover);
+const desc = entry.summary || entry.description || settings.description;
+---
+<Base settings={settings} title={`${entry.title} · ${profile.name}`} description={desc} path={path}>
+  <article class="writeup">
+    <a class="back" href="/">← {profile.name}</a>
+    <h1>{entry.title}</h1>
+    <div class="meta">
+      {meta.map((m) => m.href ? <a href={m.href} rel="noopener">{m.text}</a> : <span>{m.text}</span>)}
+    </div>
+    {cover && <img class="cover" src={cover} srcset={coverImg.srcset} sizes="(max-width: 760px) 100vw, 720px" width={coverImg.width} height={coverImg.height} alt="" decoding="async" />}
+    <div class="prose" set:html={html} />
+  </article>
+</Base>

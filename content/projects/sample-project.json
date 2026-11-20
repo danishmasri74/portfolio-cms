@@ -1,0 +1,12 @@
+{
+  "title": "Sample project",
+  "year": 2026,
+  "summary": "Replace this with one or two sentences about something you built and why it matters.",
+  "stack": "Node, Astro, Git",
+  "live": "",
+  "code": "",
+  "image": null,
+  "writeup": true,
+  "show": true,
+  "order": 1
+}

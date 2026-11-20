@@ -1,0 +1,21 @@
+---
+import Writeup from '../../components/Writeup.astro';
+import { readAll } from '../../../../schema/read.js';
+
+export function getStaticPaths() {
+  const { projects, status } = readAll();
+  if (status.maintenance) return [];
+  return projects.filter((p) => p.show && p.writeup).map((p) => ({ params: { slug: p.slug } }));
+}
+
+const { slug } = Astro.params;
+const { projects, settings, profile } = readAll();
+const entry = projects.find((p) => p.slug === slug);
+if (!entry) return Astro.redirect('/');
+const meta = [
+  { text: [entry.year, entry.stack.split(',').map((s) => s.trim()).filter(Boolean).join(' · ')].filter(Boolean).join(' · ') },
+  entry.live && { text: 'Live ↗', href: entry.live },
+  entry.code && { text: 'Code ↗', href: entry.code },
+].filter(Boolean);
+---
+<Writeup settings={settings} profile={profile} entry={entry} meta={meta} cover={entry.image} path={`/projects/${slug}/`} />

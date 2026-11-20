@@ -1,0 +1,11 @@
+{
+  "title": "Your degree or job title",
+  "org": "University or company",
+  "start": "2024-09",
+  "end": null,
+  "description": "Sample entry. Replace with what you studied or did there.",
+  "link": "",
+  "writeup": false,
+  "show": true,
+  "order": 1
+}

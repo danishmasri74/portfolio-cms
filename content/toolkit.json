@@ -1,0 +1,77 @@
+{
+  "icons": true,
+  "iconStyle": "brand",
+  "groups": [
+    {
+      "label": "Languages",
+      "items": [
+        {
+          "name": "TypeScript",
+          "icon": {
+            "set": "si",
+            "name": "typescript"
+          }
+        },
+        {
+          "name": "Python",
+          "icon": {
+            "set": "si",
+            "name": "python"
+          }
+        },
+        {
+          "name": "SQL",
+          "icon": {
+            "set": "lucide",
+            "name": "database"
+          }
+        }
+      ]
+    },
+    {
+      "label": "Web",
+      "items": [
+        {
+          "name": "React",
+          "icon": {
+            "set": "si",
+            "name": "react"
+          }
+        },
+        {
+          "name": "Astro",
+          "icon": {
+            "set": "si",
+            "name": "astro"
+          }
+        },
+        {
+          "name": "Node",
+          "icon": {
+            "set": "si",
+            "name": "nodedotjs"
+          }
+        }
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {
+          "name": "Git",
+          "icon": {
+            "set": "si",
+            "name": "git"
+          }
+        },
+        {
+          "name": "Docker",
+          "icon": {
+            "set": "si",
+            "name": "docker"
+          }
+        }
+      ]
+    }
+  ]
+}

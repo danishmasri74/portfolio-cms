@@ -1,0 +1,21 @@
+---
+import Writeup from '../../components/Writeup.astro';
+import { readAll } from '../../../../schema/read.js';
+import { formatRange } from '../../../../schema/content.js';
+
+export function getStaticPaths() {
+  const { experience, status } = readAll();
+  if (status.maintenance) return [];
+  return experience.filter((e) => e.show && e.writeup).map((e) => ({ params: { slug: e.slug } }));
+}
+
+const { slug } = Astro.params;
+const { experience, settings, profile } = readAll();
+const entry = experience.find((e) => e.slug === slug);
+if (!entry) return Astro.redirect('/');
+const meta = [
+  { text: [formatRange(entry.start, entry.end), entry.org].filter(Boolean).join(' · ') },
+  entry.link && { text: `${new URL(entry.link).hostname.replace(/^www\./, '')} ↗`, href: entry.link },
+].filter(Boolean);
+---
+<Writeup settings={settings} profile={profile} entry={entry} meta={meta} cover={null} path={`/experience/${slug}/`} />

@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio CMS</title>
+  <link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/fontsource/instrument-sans/400.css">
+  <link rel="stylesheet" href="/fontsource/instrument-sans/500.css">
+  <link rel="stylesheet" href="/fontsource/instrument-sans/600.css">
+  <link rel="stylesheet" href="/fontsource/jetbrains-mono/400.css">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+  <script defer src="/vendor/alpine.js"></script>
+</head>
+<body x-data="cms">
+
+<template x-if="fatal">
+  <div class="pvdead" style="height:100vh;padding:0 64px"><b x-text="fatal"></b><span>Start it again from the desktop shortcut, or run <code style="color:inherit">npm run cms</code> in the portfolio folder.</span></div>
+</template>
+
+<div class="app" :class="{ solo: view === 'setup' }" x-show="ready && !fatal" x-cloak>
+  <!-- title bar -->
+  <header class="tb">
+    <b>Portfolio CMS</b>
+    <span class="site" x-text="view === 'setup' ? 'first launch' : (data.settings?.siteUrl || '').replace(/^https?:\/\//, '')"></span>
+    <span class="mnt" x-show="data.status?.maintenance && view !== 'setup'">Maintenance mode is live</span>
+    <a class="renew" href="#settings" x-show="renewal && view !== 'setup'" :class="{ bad: renewal && renewal.days <= 7 }" x-text="renewal ? renewal.text + ' · renew it' : ''" title="Renew at your registrar, then update the date in Settings"></a>
+    <span class="sync" x-show="view !== 'setup'" :style="{ '--sync': syncText[1] }" x-text="syncText[0]"></span>
+    <button class="quit" type="button" @click="quit()" :style="view === 'setup' ? 'margin-left:auto' : ''">Quit</button>
+  </header>
+
+  <!-- sidebar -->
+  <nav class="side" x-show="view !== 'setup'" aria-label="Sections">
+    <a href="#profile" :class="{ on: navOn('profile') }">Profile <span class="dot" x-show="sectionDirty('profile')"></span></a>
+    <a href="#projects" :class="{ on: navOn('projects') }">Projects <span class="dot" x-show="sectionDirty('projects')"></span></a>
+    <a href="#experience" :class="{ on: navOn('experience') }">Experience <span class="dot" x-show="sectionDirty('experience')"></span></a>
+    <a href="#toolkit" :class="{ on: navOn('toolkit') }">Toolkit <span class="dot" x-show="sectionDirty('toolkit')"></span></a>
+    <div class="sep">
+      <a href="#history" :class="{ on: navOn('history') }">History</a>
+      <a href="#hosting" :class="{ on: navOn('hosting') }">Hosting</a>
+      <a href="#settings" :class="{ on: navOn('settings') }">Settings <span class="dot" x-show="sectionDirty('settings')"></span></a>
+    </div>
+  </nav>
+
+  <main class="main" :style="view === 'setup' ? 'padding:0' : ''">
+
+    <!-- ================= PROJECTS / EXPERIENCE LISTS ================= -->
+    <template x-if="view === 'projects' || view === 'experience'">
+      <div>
+        <div class="ph">
+          <h1 x-text="view === 'projects' ? 'Projects' : 'Experience'"></h1>
+          <span class="sub" x-text="`${data[view].length} ${view === 'projects' ? (data[view].length === 1 ? 'project' : 'projects') : (data[view].length === 1 ? 'entry' : 'entries')} · ${data[view].filter((p) => p.show).length} shown`"></span>
+          <div class="r"><button class="btn" type="button" @click="go(`#${view}/new`)" x-text="view === 'projects' ? 'New project' : 'New entry'"></button></div>
+        </div>
+        <template x-if="!data[view].length">
+          <div class="empty"><b x-text="view === 'projects' ? 'Add your first project' : 'Add your first entry'"></b><span x-text="view === 'projects' ? 'Projects appear in the Work list on your site.' : 'Study, jobs, roles and volunteering appear under Experience.'"></span></div>
+        </template>
+        <div x-show="data[view].length">
+          <div class="lh" :class="{ exp: view === 'experience' }">
+            <span></span>
+            <span x-text="view === 'projects' ? 'Image' : 'Dates'"></span>
+            <span>Title</span>
+            <span x-text="view === 'projects' ? 'Year' : 'Write-up'"></span>
+            <span>Shown</span><span></span>
+          </div>
+          <template x-for="(p, i) in data[view]" :key="p.slug">
+            <div class="lr" :class="{ exp: view === 'experience', off: !p.show, dragging: drag && drag.list === view && drag.i === i, over: dropOn === `${view}:${i}` }"
+                 draggable="true" @dragstart="dragStart(view, i, $event)" @dragover="dragOver(view, i, $event)" @drop.prevent="dropAt(view, i)" @dragend="dragEnd()"
+                 @click="go(`#${view}/${p.slug}`)" @keydown.enter="go(`#${view}/${p.slug}`)" tabindex="0">
+              <span class="hd" title="Drag to reorder" aria-hidden="true">⠿</span>
+              <template x-if="view === 'projects'">
+                <span><template x-if="p.image"><img class="th" :src="`/site${p.image}`" alt=""></template><template x-if="!p.image"><span class="th none">none</span></template></span>
+              </template>
+              <template x-if="view === 'experience'"><span class="yr" style="font-size:12px" x-text="fmtRange(p.start, p.end)"></span></template>
+              <span style="min-width:0"><b x-text="p.title"></b><span class="s" x-text="view === 'projects' ? p.summary : p.org"></span></span>
+              <template x-if="view === 'projects'"><span class="yr" x-text="p.year"></span></template>
+              <template x-if="view === 'experience'"><span class="wu" :class="{ no: !p.writeup }" x-text="p.writeup ? 'Page' : 'none'"></span></template>
+              <button class="sw" type="button" role="switch" :aria-checked="String(p.show)" :aria-label="`Show ${p.title} on the site`" @click.stop="toggleShow(view, p)"></button>
+              <span class="st" x-text="itemEdited(view, p.slug) ? 'edited' : ''"></span>
+            </div>
+          </template>
+          <p class="hint">Drag ⠿ to reorder. The site follows this order. Click a row to edit it.</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= PROJECT / EXPERIENCE EDITOR ================= -->
+    <template x-if="(view === 'project' || view === 'exp') && form">
+      <div>
+        <div class="ph">
+          <span class="crumb"><a :href="view === 'project' ? '#projects' : '#experience'" x-text="view === 'project' ? 'Projects' : 'Experience'"></a> /<b x-text="form.title || (view === 'project' ? 'New project' : 'New entry')"></b></span>
+          <div class="r">
+            <span class="unsaved" x-show="dirty">Unsaved changes</span>
+            <button class="btn ghost" type="button" x-show="dirty || isNew" @click="cancelEdits()">Cancel</button>
+            <button class="btn pri" type="button" @click="save()" :disabled="saving" x-text="saving ? 'Saving…' : 'Save'"></button>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" :class="{ on: tab === 'details' }" @click="go(hashFor({ view, slug, isNew, tab: 'details' }))">Details</button>
+          <button type="button" role="tab" :class="{ on: tab === 'writeup' }" @click="go(hashFor({ view, slug, isNew, tab: 'writeup' }))">Write-up</button>
+        </div>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+
+        <!-- project details -->
+        <template x-if="tab === 'details' && view === 'project'">
+          <div class="fg">
+            <div class="f t" :class="{ err: err('title') }"><label for="p-title">Title</label><input id="p-title" type="text" x-model="form.title" maxlength="60"><span class="errt" x-text="err('title')"></span></div>
+            <div class="f q" :class="{ err: err('year') }"><label for="p-year">Year</label><input id="p-year" type="number" x-model.number="form.year"><span class="errt" x-text="err('year')"></span></div>
+            <div class="f" :class="{ err: err('summary') }">
+              <label for="p-summary">Summary <i :class="{ over: count(form.summary, 180).over }" x-text="count(form.summary, 180).text"></i></label>
+              <textarea id="p-summary" x-model="form.summary" rows="3" placeholder="What it is, and what you did on it."></textarea>
+              <span class="errt" x-text="err('summary')"></span>
+            </div>
+            <div class="f" :class="{ err: err('stack') }"><label for="p-stack">Stack</label><input id="p-stack" type="text" x-model="form.stack" placeholder="React, Express, PostgreSQL"><span class="help">Comma separated. Shown as plain text.</span></div>
+            <div class="f h" :class="{ err: err('live') }"><label for="p-live">Live demo <i>optional</i></label><input id="p-live" type="url" class="mono" x-model="form.live" placeholder="https://"><span class="errt" x-text="err('live')"></span></div>
+            <div class="f h" :class="{ err: err('code') }"><label for="p-code">Code <i>optional</i></label><input id="p-code" type="url" class="mono" x-model="form.code" placeholder="https://github.com/…"><span class="errt" x-text="err('code')"></span></div>
+            <div class="f">
+              <span class="lb">Image <i>optional</i></span>
+              <template x-if="form.image">
+                <div class="media">
+                  <img class="shot" :src="`/site${form.image}`" alt="">
+                  <div class="meta">
+                    <span class="fn" x-text="fileName(form.image)"></span>
+                    <span x-show="imageInfo" x-text="imageInfo ? `${imageInfo.width} × ${imageInfo.height} · ${fmtSize(imageInfo.size)}` : ''"></span>
+                    <div class="acts"><label class="btn sm" for="p-img">Replace</label><button class="btn sm ghost" type="button" @click="form.image = null; imageInfo = null">Remove</button></div>
+                  </div>
+                </div>
+              </template>
+              <template x-if="!form.image">
+                <label class="drop" for="p-img" @dragover.prevent="$el.classList.add('on')" @dragleave="$el.classList.remove('on')" @drop.prevent="$el.classList.remove('on'); uploadProjectImage($event.dataTransfer.files[0])">Drop a screenshot here, or click to choose one</label>
+              </template>
+              <input class="hidden-file" id="p-img" type="file" accept="image/*" @change="uploadProjectImage($event.target.files[0]); $event.target.value = ''">
+              <span class="help">Without an image this project shows as a text-only row. Images are resized and saved as WebP.</span>
+            </div>
+            <div class="grp">On the site</div>
+            <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.show)" @click="form.show = !form.show" aria-labelledby="p-show-l"></button><span id="p-show-l">Shown on the site</span></div></div>
+            <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.writeup)" @click="form.writeup = !form.writeup" aria-labelledby="p-wu-l"></button><span id="p-wu-l">Write-up page</span></div><span class="help">Adds "Write-up →" to this project. Write it in the Write-up tab.</span></div>
+            <div class="f" x-show="!isNew" style="margin-top:18px"><button class="btn sm ghost danger" type="button" @click="removeEntry()" style="justify-self:start">Delete project</button></div>
+          </div>
+        </template>
+
+        <!-- experience details -->
+        <template x-if="tab === 'details' && view === 'exp'">
+          <div class="fg">
+            <div class="f h" :class="{ err: err('title') }"><label for="e-title">Title</label><input id="e-title" type="text" x-model="form.title" placeholder="Software engineering intern"><span class="errt" x-text="err('title')"></span></div>
+            <div class="f h" :class="{ err: err('org') }"><label for="e-org">Organisation</label><input id="e-org" type="text" x-model="form.org" placeholder="Company, university or event"><span class="errt" x-text="err('org')"></span></div>
+            <div class="f h" :class="{ err: err('start') }"><label for="e-start">Start</label><input id="e-start" type="month" x-model="form.start"><span class="errt" x-text="err('start')"></span></div>
+            <div class="f h" :class="{ err: err('end') }"><label for="e-end">End</label><input id="e-end" type="month" :value="form.end || ''" @input="form.end = $event.target.value || null" :disabled="form.end === null"><span class="errt" x-text="err('end')"></span></div>
+            <div class="f"><label class="chk"><input type="checkbox" :checked="form.end === null" @change="form.end = $event.target.checked ? null : form.start">I still work or study here</label></div>
+            <div class="f" :class="{ err: err('description') }">
+              <label for="e-desc">Description <i :class="{ over: count(form.description, 180).over }" x-text="count(form.description, 180).text"></i></label>
+              <textarea id="e-desc" x-model="form.description" rows="3" placeholder="What you did and what came of it."></textarea>
+              <span class="errt" x-text="err('description')"></span>
+            </div>
+            <div class="f" :class="{ err: err('link') }"><label for="e-link">Link <i>optional</i></label><input id="e-link" type="url" class="mono" x-model="form.link" placeholder="https://"><span class="errt" x-text="err('link')"></span></div>
+            <div class="grp">On the site</div>
+            <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.writeup)" @click="form.writeup = !form.writeup" aria-labelledby="e-wu-l"></button><span id="e-wu-l">Write-up page</span></div><span class="help">Adds "Write-up →" under this entry.</span></div>
+            <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.show)" @click="form.show = !form.show" aria-labelledby="e-show-l"></button><span id="e-show-l">Shown on the site</span></div></div>
+            <div class="f" x-show="!isNew" style="margin-top:18px"><button class="btn sm ghost danger" type="button" @click="removeEntry()" style="justify-self:start">Delete entry</button></div>
+          </div>
+        </template>
+
+        <!-- write-up (shared) -->
+        <template x-if="tab === 'writeup'">
+          <div>
+            <div class="tg" style="margin-bottom:14px;font-size:13px">
+              <button class="sw" type="button" role="switch" :aria-checked="String(form.writeup)" @click="form.writeup = !form.writeup" aria-labelledby="wu-on-l"></button>
+              <span id="wu-on-l" x-text="form.writeup ? 'Page is on. It gets a Write-up link on the site.' : 'Page is off. The text is kept but not published.'"></span>
+            </div>
+            <div class="mdbar" role="toolbar" aria-label="Formatting">
+              <button type="button" @click="mdLine('## ')" title="Heading">H2</button>
+              <button type="button" @click="mdLine('### ')" title="Subheading">H3</button>
+              <span class="gap"></span>
+              <button type="button" @click="md('**', '**', 'bold text')" title="Bold"><b>B</b></button>
+              <button type="button" @click="md('_', '_', 'italic text')" title="Italic"><i>I</i></button>
+              <button type="button" @click="md('[', '](https://)', 'link text')" title="Link">link</button>
+              <button type="button" @click="md('`', '`', 'code')" title="Inline code">`code`</button>
+              <span class="gap"></span>
+              <label for="md-img" style="font-family:var(--mono);font-size:12.5px;padding:3px 8px;border-radius:4px;cursor:pointer" title="Insert image">image</label>
+              <button type="button" @click="mdLine('- ')" title="Bulleted list">list</button>
+              <button type="button" @click="mdLine('> ')" title="Quote">quote</button>
+              <span class="r" x-text="`${words} words · ${Math.max(1, Math.round(words / 220))} min read`"></span>
+            </div>
+            <input class="hidden-file" id="md-img" type="file" accept="image/*" @change="mdImage($event.target.files[0]); $event.target.value = ''">
+            <textarea class="md" x-ref="md" x-model="writeup" spellcheck="true" aria-label="Write-up in Markdown"
+              placeholder="## The problem&#10;What were you trying to fix?&#10;&#10;## What I built&#10;- The main parts, and what you did on each&#10;&#10;## What I learned&#10;Paste or drop images straight in."
+              @paste="onMdPaste($event)" @dragover.prevent="$el.classList.add('drag')" @dragleave="$el.classList.remove('drag')" @drop.prevent="$el.classList.remove('drag'); onMdDrop($event)"></textarea>
+            <p class="hint">Markdown. Paste or drop an image to upload it. Save, then the preview shows the page.</p>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- ================= PROFILE ================= -->
+    <template x-if="view === 'profile' && form">
+      <div>
+        <div class="ph"><h1>Profile</h1><div class="r"><span class="unsaved" x-show="dirty">Unsaved changes</span><button class="btn ghost" type="button" x-show="dirty" @click="cancelEdits()">Cancel</button><button class="btn pri" type="button" @click="save()" :disabled="saving">Save</button></div></div>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+        <div class="fg">
+          <div class="f">
+            <span class="lb">Photo</span>
+            <div class="focal">
+              <template x-if="form.photo.src">
+                <div class="big" @mousedown="setFocal($event)" @mousemove="focalDrag($event)" title="Click or drag to set the focus">
+                  <img :src="`/site${form.photo.src}`" alt="">
+                  <span class="pt" :style="`left:${form.photo.focusX}%;top:${form.photo.focusY}%`"></span>
+                </div>
+              </template>
+              <template x-if="!form.photo.src">
+                <label class="big drop" for="ph-file" style="display:grid;place-items:center;cursor:pointer">Choose a photo</label>
+              </template>
+              <div class="crops">
+                <div><template x-if="form.photo.src"><img class="crop" :src="`/site${form.photo.src}`" alt="" :style="`width:112px;height:112px;border-radius:10px;object-position:${form.photo.focusX}% ${form.photo.focusY}%`"></template><template x-if="!form.photo.src"><span class="crop" style="width:112px;height:112px;border-radius:10px" x-text="initials(form.name)"></span></template>Desktop</div>
+                <div><template x-if="form.photo.src"><img class="crop" :src="`/site${form.photo.src}`" alt="" :style="`width:72px;height:72px;border-radius:8px;object-position:${form.photo.focusX}% ${form.photo.focusY}%`"></template><template x-if="!form.photo.src"><span class="crop" style="width:72px;height:72px;border-radius:8px" x-text="initials(form.name)"></span></template>Phone</div>
+                <div><label class="btn sm" for="ph-file" x-text="form.photo.src ? 'Replace photo' : 'Choose photo'"></label><button class="btn sm ghost" type="button" x-show="form.photo.src" @click="form.photo.src = null">Remove</button></div>
+              </div>
+            </div>
+            <input class="hidden-file" id="ph-file" type="file" accept="image/*" @change="uploadPhoto($event.target.files[0]); $event.target.value = ''">
+            <span class="help" x-show="form.photo.src">Click or drag on the photo to set where both crops centre.</span>
+          </div>
+          <div class="f h" :class="{ err: err('name') }"><label for="pr-name">Name</label><input id="pr-name" type="text" x-model="form.name"><span class="errt" x-text="err('name')"></span></div>
+          <div class="f h" :class="{ err: err('role') }"><label for="pr-role">Role</label><input id="pr-role" type="text" x-model="form.role"><span class="errt" x-text="err('role')"></span></div>
+          <div class="f" :class="{ err: err('bio') }"><label for="pr-bio">Bio <i :class="{ over: count(form.bio, 400).over }" x-text="count(form.bio, 400).text"></i></label><textarea id="pr-bio" x-model="form.bio" rows="5"></textarea><span class="errt" x-text="err('bio')"></span></div>
+
+          <div class="grp">Details <span class="gh">Show</span></div>
+          <div class="f">
+            <template x-for="row in DETAIL_ROWS" :key="row[0]">
+              <div class="dr" :class="{ err: err(`details.${row[0]}.value`) }">
+                <label :for="`d-${row[0]}`" x-text="row[1]"></label>
+                <input :id="`d-${row[0]}`" type="text" x-model="form.details[row[0]].value" :placeholder="row[2]">
+                <button class="sw" type="button" role="switch" :aria-checked="String(form.details[row[0]].show)" :aria-label="`Show ${row[1]}`" @click="form.details[row[0]].show = !form.details[row[0]].show"></button>
+              </div>
+            </template>
+            <span class="help">Shown details appear in one line under your role. Empty ones are skipped.</span>
+          </div>
+
+          <div class="grp">Availability</div>
+          <div class="f"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.availability.show)" @click="form.availability.show = !form.availability.show" aria-label="Show availability"></button><input type="text" x-model="form.availability.text" placeholder="Looking for a software engineering internship from June 2027" style="flex:1" aria-label="Availability text"></div></div>
+
+          <div class="grp">Links <span class="gh">Show</span></div>
+          <div class="f">
+            <template x-for="(l, i) in form.links" :key="i">
+              <div class="lk" :class="{ over: dropOn === `links:${i}` }" @dragover="dragOver('links', i, $event)" @drop.prevent="dropAt('links', i)">
+                <span class="hd" draggable="true" @dragstart="dragStart('links', i, $event)" @dragend="dragEnd()" title="Drag to reorder">⠿</span>
+                <input type="text" x-model="l.label" placeholder="GitHub" :class="{ err: err(`links.${i}.label`) }" aria-label="Link label">
+                <input type="url" class="mono" x-model="l.url" placeholder="https://" :class="{ err: err(`links.${i}.url`) }" aria-label="Link address">
+                <button class="x" type="button" @click="form.links.splice(i, 1)" :aria-label="`Remove ${l.label || 'link'}`">×</button>
+                <button class="sw" type="button" role="switch" :aria-checked="String(l.show)" @click="l.show = !l.show" :aria-label="`Show ${l.label}`"></button>
+              </div>
+            </template>
+            <template x-for="(l, i) in form.links" :key="'e' + i"><span class="errt" x-show="err(`links.${i}.url`) || err(`links.${i}.label`)" x-text="`${l.label || 'Link'}: ${err(`links.${i}.label`) || err(`links.${i}.url`)}`"></span></template>
+            <button class="btn sm ghost" type="button" style="justify-self:start" @click="form.links.push({ label: '', url: '', show: true })">+ Add link</button>
+          </div>
+
+          <div class="grp">Email <span class="gh"><button class="sw" type="button" role="switch" :aria-checked="String(form.email.show)" @click="form.email.show = !form.email.show" aria-label="Show email"></button></span></div>
+          <div class="f"><input type="email" class="mono" x-model="form.email.value" placeholder="hello@example.com" aria-label="Email"></div>
+
+          <div class="grp">Résumé <span class="gh"><button class="sw" type="button" role="switch" :aria-checked="String(form.resume.show)" @click="form.resume.show = !form.resume.show" aria-label="Show résumé link"></button></span></div>
+          <div class="f">
+            <template x-if="form.resume.src">
+              <div class="media"><div class="meta">
+                <span class="fn" x-text="fileName(form.resume.src)"></span>
+                <span x-text="[resumeInfo?.pages && `${resumeInfo.pages} page${resumeInfo.pages === 1 ? '' : 's'}`, resumeInfo && fmtSize(resumeInfo.size), form.resume.updated && `updated ${form.resume.updated}`].filter(Boolean).join(' · ')"></span>
+                <div class="acts"><label class="btn sm" for="cv-file">Replace</label><button class="btn sm ghost" type="button" @click="form.resume.src = null">Remove</button></div>
+              </div></div>
+            </template>
+            <template x-if="!form.resume.src"><label class="drop" for="cv-file">Choose a PDF résumé</label></template>
+            <input class="hidden-file" id="cv-file" type="file" accept="application/pdf" @change="uploadResume($event.target.files[0]); $event.target.value = ''">
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= TOOLKIT ================= -->
+    <template x-if="view === 'toolkit' && form">
+      <div>
+        <div class="ph"><h1>Toolkit</h1><div class="r"><span class="unsaved" x-show="dirty">Unsaved changes</span><button class="btn ghost" type="button" x-show="dirty" @click="cancelEdits()">Cancel</button><button class="btn pri" type="button" @click="save()" :disabled="saving">Save</button></div></div>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+        <div class="icobar">
+          <div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.icons)" @click="form.icons = !form.icons" aria-labelledby="tk-ic-l"></button><span id="tk-ic-l">Show icons</span></div>
+          <span class="seg" x-show="form.icons"><button type="button" :class="{ on: form.iconStyle === 'mono' }" @click="form.iconStyle = 'mono'">Monochrome</button><button type="button" :class="{ on: form.iconStyle === 'brand' }" @click="form.iconStyle = 'brand'">Brand colours</button></span>
+          <span class="help">Desktop only. Phones show text.</span>
+        </div>
+        <template x-for="(g, gi) in form.groups" :key="gi">
+          <div class="tgrp" :data-g="gi" :class="{ over: dropOn === `groups:${gi}` }" @dragover="dragOver('groups', gi, $event)" @drop.prevent="dropAt('groups', gi)">
+            <div class="tgh">
+              <span class="hd" draggable="true" @dragstart="dragStart('groups', gi, $event)" @dragend="dragEnd()" title="Drag to reorder groups">⠿</span>
+              <input type="text" x-model="g.label" placeholder="Group name" :class="{ err: err(`groups.${gi}.label`) }" aria-label="Group name">
+              <button class="x" type="button" @click="form.groups.splice(gi, 1)" :aria-label="`Remove ${g.label || 'group'}`">×</button>
+            </div>
+            <div class="items">
+              <template x-for="(it, ii) in g.items" :key="ii">
+                <div class="it" :class="{ over: dropOn === `items:${gi}:${ii}` }" @dragover="drag && drag.list === `items:${gi}` && ($event.preventDefault(), dropOn = `items:${gi}:${ii}`)" @drop.prevent="dropAt(`items:${gi}`, ii)" draggable="true" @dragstart="dragStart(`items:${gi}`, ii, $event)" @dragend="dragEnd()" @click.outside="picker.open && picker.g === gi && picker.i === ii && (picker.open = false)">
+                  <button class="ib" type="button" :class="{ act: picker.open && picker.g === gi && picker.i === ii }" @click="openPicker(gi, ii)" :aria-label="`Choose icon for ${it.name || 'item'}`">
+                    <template x-if="it.icon && svg[iconKey(it.icon)]"><span x-html="svg[iconKey(it.icon)]" :style="form.iconStyle === 'brand' ? '' : ''"></span></template>
+                    <template x-if="!it.icon || !svg[iconKey(it.icon)]"><span class="none">+</span></template>
+                  </button>
+                  <input type="text" x-model="it.name" @blur="autoIcon(it)" placeholder="Item name" aria-label="Item name" :class="{ err: err(`groups.${gi}.items.${ii}.name`) }">
+                  <button class="x" type="button" @click="g.items.splice(ii, 1); picker.open = false" :aria-label="`Remove ${it.name || 'item'}`">×</button>
+
+                  <div class="pk" :class="{ right: ii % 2 === 1 }" x-show="picker.open && picker.g === gi && picker.i === ii" @click.stop>
+                    <input type="search" x-model="picker.q" @input="searchIcons()" placeholder="Search icons" aria-label="Search icons" @keydown.enter.prevent="picker.sel && useIcon(picker.sel)">
+                    <div class="pkt">
+                      <button type="button" :class="{ on: picker.kind === 'all' }" @click="picker.kind = 'all'; searchIcons()">All</button>
+                      <button type="button" :class="{ on: picker.kind === 'si' }" @click="picker.kind = 'si'; searchIcons()">Logos</button>
+                      <button type="button" :class="{ on: picker.kind === 'lucide' }" @click="picker.kind = 'lucide'; searchIcons()">Generic</button>
+                      <span class="r" x-text="picker.forName ? `Matched to “${picker.forName}”` : ''"></span>
+                    </div>
+                    <div class="pkg">
+                      <template x-for="r in picker.results" :key="r.set + r.name">
+                        <button type="button" :class="{ sel: iconKey(picker.sel) === iconKey(r) }" @click="picker.sel = { set: r.set, name: r.name }" @dblclick="useIcon(r)" :title="r.title">
+                          <span x-html="r.svg"></span><span x-text="r.title"></span><em x-text="r.current ? 'current' : r.set === 'si' ? 'logo' : 'generic'"></em>
+                        </button>
+                      </template>
+                      <div class="msg" x-show="!picker.loading && !picker.results.length">No icons match. Try a shorter word, or use no icon.</div>
+                    </div>
+                    <div class="pkf">
+                      <button class="btn sm ghost" type="button" @click="useIcon(null)">No icon</button>
+                      <span class="src">Simple Icons · Lucide</span>
+                      <button class="btn sm pri" type="button" :disabled="!picker.sel" @click="useIcon(picker.sel)" x-text="pickerSelTitle ? `Use ${pickerSelTitle}` : 'Use icon'"></button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <button class="btn sm ghost add" type="button" @click="addItem(gi)">+ Add item</button>
+          </div>
+        </template>
+        <div style="border-top:1px solid var(--line);padding-top:14px"><button class="btn sm" type="button" @click="addGroup()">+ Add group</button></div>
+      </div>
+    </template>
+
+    <!-- ================= SETTINGS ================= -->
+    <template x-if="view === 'settings' && form">
+      <div>
+        <div class="ph"><h1>Settings</h1><div class="r"><span class="unsaved" x-show="dirty">Unsaved changes</span><button class="btn ghost" type="button" x-show="dirty" @click="cancelEdits()">Cancel</button><button class="btn pri" type="button" @click="save()" :disabled="saving">Save</button></div></div>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+        <div class="fg">
+          <div class="grp first">Site status</div>
+          <div class="f">
+            <div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(!!data.status?.maintenance)" @click="modal = data.status?.maintenance ? 'maint-off' : 'maint-on'" aria-labelledby="mt-l"></button><span id="mt-l">Maintenance mode</span></div>
+            <span class="help">Hides the portfolio behind a short message. Takes effect as soon as you confirm, with no need to save or publish.</span>
+          </div>
+          <div class="f" :class="{ err: err('status.message') }"><label for="mt-msg">Maintenance message <i x-text="count(form.status.message, 200).text"></i></label><textarea id="mt-msg" x-model="form.status.message" rows="2"></textarea><span class="errt" x-text="err('status.message')"></span></div>
+          <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.status.showEmail)" @click="form.status.showEmail = !form.status.showEmail" aria-labelledby="mt-e"></button><span id="mt-e">Show email</span></div></div>
+          <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.status.showResume)" @click="form.status.showResume = !form.status.showResume" aria-labelledby="mt-r"></button><span id="mt-r">Show résumé link</span></div></div>
+          <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.status.showPhoto)" @click="form.status.showPhoto = !form.status.showPhoto" aria-labelledby="mt-p"></button><span id="mt-p">Show photo</span></div></div>
+          <div class="f h"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.status.showLinks)" @click="form.status.showLinks = !form.status.showLinks" aria-labelledby="mt-k"></button><span id="mt-k">Show links</span></div></div>
+
+          <div class="grp">Search and sharing</div>
+          <div class="f" :class="{ err: err('settings.title') }"><label for="s-title">Page title <i :class="{ over: count(form.settings.title, 60).over }" x-text="count(form.settings.title, 60).text"></i></label><input id="s-title" type="text" x-model="form.settings.title"><span class="errt" x-text="err('settings.title')"></span></div>
+          <div class="f" :class="{ err: err('settings.description') }"><label for="s-desc">Description <i :class="{ over: count(form.settings.description, 160).over }" x-text="count(form.settings.description, 160).text"></i></label><textarea id="s-desc" x-model="form.settings.description" rows="3"></textarea><span class="help">Google shows about 160 characters before cutting it off.</span></div>
+          <div class="f">
+            <span class="lb">Share image</span>
+            <div class="media">
+              <img class="shot" style="width:220px;aspect-ratio:1200/630" :src="`/site/og.png?t=${nonce}`" alt="" onerror="this.style.visibility='hidden'" onload="this.style.visibility='visible'">
+              <div class="meta">
+                <span class="fn" x-text="form.settings.shareImage === 'generated' ? 'Generated' : 'Your own image'"></span>
+                <span x-text="form.settings.shareImage === 'generated' ? '1200 × 630 · from your name and role, updated on save' : '1200 × 630'"></span>
+                <div class="acts">
+                  <label class="btn sm" for="og-file">Upload my own</label>
+                  <button class="btn sm ghost" type="button" x-show="form.settings.shareImage === 'custom'" @click="form.settings.shareImage = 'generated'">Use generated</button>
+                </div>
+              </div>
+            </div>
+            <input class="hidden-file" id="og-file" type="file" accept="image/*" @change="uploadShare($event.target.files[0]); $event.target.value = ''">
+          </div>
+          <div class="f" :class="{ err: err('settings.siteUrl') }"><label for="s-url">Site address</label><input id="s-url" type="url" class="mono" x-model="form.settings.siteUrl"></div>
+
+          <div class="f" x-show="expiry?.reason !== 'no-domain'">
+            <span class="lb">Domain renewal</span>
+            <template x-if="expiry?.ok">
+              <div class="row2"><span x-text="`${expiry.domain} expires on ${fmtDay(expiry.expires)}`"></span><button class="btn sm" type="button" @click="loadExpiry(true)">Check again</button></div>
+            </template>
+            <span class="help" x-show="expiry?.ok" x-text="`Read automatically from the domain registry${expiry?.stale ? ' (offline, showing the last known date)' : ''}. When you renew, it updates by itself. You're reminded 30 days before.`"></span>
+            <template x-if="!expiry?.ok">
+              <div class="row2"><input id="s-renew" type="date" x-model="form.settings.domainRenews" style="max-width:200px" aria-label="Domain renews on"><button class="btn sm" type="button" @click="loadExpiry(true)">Try automatic lookup</button></div>
+            </template>
+            <span class="help" x-show="!expiry?.ok">The date couldn't be looked up automatically. Enter it from your registrar to get a reminder 30 days before.</span>
+            <span class="errt" x-text="err('settings.domainRenews')"></span>
+          </div>
+
+          <div class="grp">Publishing</div>
+          <div class="f"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.settings.checkBeforePublish)" @click="form.settings.checkBeforePublish = !form.settings.checkBeforePublish" aria-labelledby="pb-c"></button><span id="pb-c">Run Check before every publish</span></div></div>
+          <div class="f"><div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.settings.quickPublish)" @click="form.settings.quickPublish = !form.settings.quickPublish" aria-labelledby="pb-q"></button><span id="pb-q">Publish in the bottom bar publishes straight away</span></div><span class="help">Turn off to always open the review screen first.</span></div>
+
+          <div class="grp">Repository</div>
+          <div class="f"><span class="lb">Folder</span><input type="text" class="mono" :value="data.root" readonly aria-label="Folder"></div>
+          <div class="f h"><span class="lb">Branch</span><input type="text" class="mono" :value="data.branch" readonly aria-label="Branch"></div>
+          <div class="f h" :class="{ err: err('previewPort') }"><label for="s-port">Preview port</label><input id="s-port" type="number" class="mono" x-model.number="form.previewPort"><span class="errt" x-text="err('previewPort')"></span></div>
+          <div class="f">
+            <span class="okline" x-show="data.remote" x-text="`✓ Connected to ${data.remote}`"></span>
+            <span class="badline" x-show="!data.remote">Not connected to GitHub. Publishing saves to history only.</span>
+            <button class="btn sm" type="button" style="justify-self:start" @click="go('#setup')" x-text="data.remote ? 'Run setup again' : 'Connect GitHub'"></button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= HOSTING ================= -->
+    <template x-if="view === 'hosting'">
+      <div class="narrow">
+        <div class="ph"><h1>Hosting</h1><span class="sub">Cloudflare Pages · free</span></div>
+        <p class="lede">Publish uploads your site straight to Cloudflare. GitHub keeps a backup of every version.</p>
+
+        <div class="note bad" x-show="hostingForm.error"><span x-text="hostingForm.error"></span></div>
+        <template x-if="hosting && hosting.projectMissing">
+          <div class="note warn"><span x-text="`The site “${hosting.projectMissing}” was deleted in Cloudflare. Create it again below to keep publishing.`"></span></div>
+        </template>
+        <template x-if="domainState === 'live' && changes.items.some((i) => i.key === 'settings')">
+          <div class="note"><span x-text="`Publish once so links and share previews use https://${hosting.domain}.`"></span><button class="btn sm dark" type="button" @click="quickPublish()" :disabled="!!busy">Publish ▸</button></div>
+        </template>
+
+        <div class="pvdead" style="height:auto;padding:24px 0" x-show="!hosting"><b>Checking Cloudflare…</b></div>
+
+        <template x-if="hosting">
+          <ol class="steps">
+            <!-- 1. account -->
+            <li class="step" :class="hosting.connected ? 'done' : 'now'">
+              <span class="n" aria-hidden="true" x-text="hosting.connected ? '✓' : '1'"></span>
+              <div class="body">
+                <h2>Cloudflare account</h2>
+                <template x-if="hosting.connected">
+                  <div class="row"><p x-text="`Signed in as ${hosting.email}`"></p><button class="btn sm" type="button" @click="confirmBar('Disconnect Cloudflare?', 'Your site stays online. Publishing won’t upload until you connect again.', 'Disconnect', () => hostingAction('logout'))" :disabled="!!hostingForm.busy">Disconnect</button></div>
+                </template>
+                <template x-if="!hosting.connected && hosting.loginPending">
+                  <div>
+                    <p>A Cloudflare page opened in your browser. Sign in or create a free account, then click <b>Allow</b>.</p>
+                    <div class="row"><span class="wait">Waiting for you in the browser</span><button class="btn sm" type="button" @click="hostingAction('cancel')">Cancel</button></div>
+                  </div>
+                </template>
+                <template x-if="!hosting.connected && !hosting.loginPending">
+                  <div>
+                    <p x-text="hosting.offline ? 'Cloudflare can’t be reached right now. Check your internet connection.' : 'Opens Cloudflare in your browser to sign in or create a free account. The CMS only asks to manage Pages sites and read your domains.'"></p>
+                    <p class="badline" x-show="hosting.loginError" x-text="hosting.loginError"></p>
+                    <div class="row"><button class="btn sm pri" type="button" @click="hostingAction('login')" :disabled="!!hostingForm.busy">Connect Cloudflare</button></div>
+                  </div>
+                </template>
+              </div>
+            </li>
+
+            <!-- 2. site -->
+            <li class="step" :class="hosting.project ? 'done' : (hosting.connected ? 'now' : 'later')">
+              <span class="n" aria-hidden="true" x-text="hosting.project ? '✓' : '2'"></span>
+              <div class="body">
+                <h2>Site</h2>
+                <template x-if="hosting.project">
+                  <div>
+                    <p><a :href="`https://${hosting.subdomain}`" target="_blank" rel="noopener" x-text="`${hosting.subdomain} ↗`"></a></p>
+                    <div class="row">
+                      <p class="muted" x-text="hosting.lastDeployAt ? `Last uploaded ${fmtDate(hosting.lastDeployAt)}` : 'Nothing uploaded yet'"></p>
+                      <button class="btn sm" type="button" @click="hostingAction('deploy')" :disabled="!!hostingForm.busy || !!busy || !changes.hasHead" x-text="hostingForm.busy === 'deploy' ? 'Uploading…' : 'Upload now'"></button>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="!hosting.project">
+                  <div>
+                    <p>Creates the site on Cloudflare with a free address, before any domain is involved.</p>
+                    <div class="row">
+                      <span class="addr"><input type="text" class="mono" x-model="hostingForm.project" aria-label="Site name" :disabled="!hosting.connected" @keydown.enter="hostingAction('project')"><span>.pages.dev</span></span>
+                      <button class="btn sm" type="button" @click="hostingAction('project')" :disabled="!hosting.connected || !!hostingForm.busy || !hostingForm.project.trim()" x-text="hostingForm.busy === 'project' ? 'Creating…' : 'Create site'"></button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </li>
+
+            <!-- 3. domain -->
+            <li class="step" :class="domainState === 'live' ? 'done' : (hosting.project ? 'now' : 'later')">
+              <span class="n" aria-hidden="true" x-text="domainState === 'live' ? '✓' : '3'"></span>
+              <div class="body">
+                <h2>Domain</h2>
+
+                <template x-if="domainState === 'none'">
+                  <div>
+                    <p>Use a domain bought anywhere, like Hostinger or Porkbun. It also becomes your site address in Settings.</p>
+                    <div class="row">
+                      <input type="text" class="mono" style="width:240px" x-model="hostingForm.domain" placeholder="yourname.com" aria-label="Domain" :disabled="!hosting.project" @keydown.enter="hostingAction('domain')">
+                      <button class="btn sm" type="button" @click="hostingAction('domain')" :disabled="!hosting.project || !!hostingForm.busy || !hostingForm.domain.trim()">Use domain</button>
+                      <button class="btn sm ghost" type="button" x-show="hostingForm.changing" @click="hostingForm.changing = false; hostingForm.domain = hosting.domain">Cancel</button>
+                    </div>
+                  </div>
+                </template>
+
+                <template x-if="domainState === 'add'">
+                  <div>
+                    <p x-text="`Add ${hosting.domain} to your Cloudflare account. This is the one step the CMS can’t do for you.`"></p>
+                    <ol class="howto">
+                      <li>Open Cloudflare and click <b>Add a domain</b>.</li>
+                      <li x-text="`Type ${hosting.domain} and pick the Free plan.`"></li>
+                      <li>Continue past the DNS records screen. Nothing there needs changing.</li>
+                    </ol>
+                    <div class="row"><a class="btn sm pri" href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Open Cloudflare ↗</a><span class="wait">Checking every few seconds</span></div>
+                  </div>
+                </template>
+
+                <template x-if="domainState === 'nameservers'">
+                  <div>
+                    <p x-text="`Where you bought ${hosting.domain}, replace its nameservers with these two:`"></p>
+                    <div class="ns">
+                      <template x-for="ns in hosting.zone.nameServers" :key="ns">
+                        <div><code x-text="ns"></code><button class="btn sm" type="button" @click="copy(ns)">Copy</button></div>
+                      </template>
+                    </div>
+                    <dl class="where">
+                      <dt>Hostinger</dt><dd>Domains, then DNS / Nameservers, then Change nameservers</dd>
+                      <dt>Porkbun</dt><dd>Domain management, then Details, then Authoritative nameservers</dd>
+                    </dl>
+                    <p class="muted" x-show="hosting.zone.originalNameServers.length" x-text="`Replace: ${hosting.zone.originalNameServers.join(', ')}`"></p>
+                    <div class="row"><span class="wait">Waiting for the switch. Usually 15 to 60 minutes, sometimes up to a day.</span></div>
+                  </div>
+                </template>
+
+                <template x-if="domainState === 'ssl'">
+                  <div>
+                    <p x-text="`${hosting.domain} is on Cloudflare. Connecting it to your site and setting up the secure certificate.`"></p>
+                    <div class="row"><span class="wait" x-text="(hosting.pagesDomains || []).length ? (hosting.pagesDomains || []).map((d) => `${d.name}: ${d.status}`).join(' · ') : 'Starting'"></span></div>
+                  </div>
+                </template>
+
+                <template x-if="domainState === 'live'">
+                  <p><a :href="`https://${hosting.domain}`" target="_blank" rel="noopener" x-text="`https://${hosting.domain} ↗`"></a> <span class="okline">is live</span></p>
+                </template>
+
+                <p class="badline" x-show="hosting.domainError && domainState !== 'none'" x-text="hosting.domainError"></p>
+                <div class="row" x-show="hosting.domain && domainState !== 'none'">
+                  <button class="btn sm" type="button" @click="hostingForm.changing = true; hostingForm.domain = ''">Change domain</button>
+                  <button class="linkbtn bad" type="button" @click="confirmBar(`Remove ${hosting.domain} from your site?`, 'The site stays online at its pages.dev address.', 'Remove', () => hostingAction('remove'))">Remove domain</button>
+                </div>
+              </div>
+            </li>
+          </ol>
+        </template>
+        <p class="hint">Moving to a new domain later: use Change domain, add the new one to Cloudflare, then update its nameservers. The old domain can keep working until it expires.</p>
+      </div>
+    </template>
+
+    <!-- ================= REVIEW ================= -->
+    <template x-if="view === 'review'">
+      <div>
+        <div class="ph"><h1 x-text="changes.items.length ? `Publish ${changes.items.length} change${changes.items.length === 1 ? '' : 's'}` : 'Nothing to publish'"></h1>
+          <div class="r"><button class="btn ghost" type="button" @click="go('#projects')">Cancel</button><button class="btn dark" type="button" @click="publish(commitMessage)" :disabled="!changes.items.length && !changes.ahead || busy">Publish ▸</button></div></div>
+        <div class="chg" x-show="changes.items.length">
+          <template x-for="item in changes.items" :key="item.key">
+            <div class="c">
+              <span class="k" :class="{ n: item.state === 'new', d: item.state === 'deleted' }" x-text="item.state === 'new' ? 'A' : item.state === 'deleted' ? 'D' : 'M'"></span>
+              <span><span class="w" x-show="item.section" x-text="item.section + ' · '"></span><b x-text="item.label"></b> <span class="w" x-text="item.summary"></span></span>
+              <button class="linkbtn bad" type="button" @click="discardOne(item)" x-show="changes.hasHead">Discard</button>
+            </div>
+          </template>
+        </div>
+        <div class="check wait" x-show="changes.items.length && !lastCheck && busy !== 'checking'"><b>Not checked yet</b>Check builds the whole site to catch broken content.<button class="btn sm" type="button" style="margin-left:auto" @click="runCheck()">Check now</button></div>
+        <div class="check wait" x-show="busy === 'checking'"><b>Checking…</b>Building every page.</div>
+        <template x-if="changes.items.length && lastCheck && busy !== 'checking'">
+          <div class="check" :class="lastCheck.ok ? 'ok' : 'bad'"><div><b x-text="lastCheck.ok ? '✓ Build passed' : 'Build failed'"></b> <span x-text="lastCheck.message"></span></div><span class="t" x-text="`${lastCheck.seconds} s · ${fmtTime(lastCheck.at)}`"></span></div>
+        </template>
+        <template x-for="w in (busy !== 'checking' && lastCheck?.warnings) || []" :key="w">
+          <div class="check wait" style="color:var(--warn-text)"><b>Heads up</b><span x-text="w"></span></div>
+        </template>
+        <div class="check wait" x-show="!changes.items.length && busy !== 'checking'"><span>Check builds every page and tests your outside links.</span><button class="btn sm" type="button" style="margin-left:auto" @click="runCheck()">Check site and links</button></div>
+        <div class="check wait" x-show="!changes.items.length && busy === 'checking'"><b>Checking…</b>Building every page and testing links.</div>
+        <template x-if="lastCheck?.links && (lastCheck.links.broken.length || lastCheck.links.unknown.length || lastCheck.links.offline)">
+          <div class="linkrep">
+            <p class="h4">Links</p>
+            <p class="hint" x-show="lastCheck.links.offline" style="margin:0">Links weren't checked because you're offline.</p>
+            <template x-for="l in lastCheck.links.broken" :key="'b' + l.url">
+              <div class="lrow"><span class="tag bad">Broken</span><span class="w"><b x-text="l.where.join(', ')"></b><a :href="l.url" target="_blank" rel="noopener" x-text="l.url"></a></span><span class="why" x-text="l.reason + (l.code ? ` (${l.code})` : '')"></span></div>
+            </template>
+            <template x-for="l in lastCheck.links.unknown" :key="'u' + l.url">
+              <div class="lrow"><span class="tag">Couldn't check</span><span class="w"><b x-text="l.where.join(', ')"></b><a :href="l.url" target="_blank" rel="noopener" x-text="l.url"></a></span><span class="why" x-text="l.reason"></span></div>
+            </template>
+            <p class="hint" x-show="lastCheck.links.unknown.length">Sites like LinkedIn block automatic checks. Open those links yourself to be sure.</p>
+          </div>
+        </template>
+        <div class="f" x-show="changes.items.length"><label for="cm">Commit message</label><input id="cm" type="text" x-model="commitMessage" maxlength="120"></div>
+        <p class="h4">Recent publishes</p>
+        <div class="hist">
+          <template x-for="h in history.slice(0, 5)" :key="h.hash"><div class="r"><span class="d" x-text="fmtDate(h.date)"></span><span x-text="h.message"></span><code x-text="h.short"></code><button class="linkbtn" type="button" @click="revert(h)">Revert</button></div></template>
+          <p class="hint" x-show="!history.length">Nothing published yet.</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= HISTORY ================= -->
+    <template x-if="view === 'history'">
+      <div>
+        <div class="ph"><h1>History</h1><span class="sub">Every publish is a saved version</span></div>
+        <div class="hist">
+          <template x-for="h in history" :key="h.hash"><div class="r"><span class="d" x-text="fmtDate(h.date)"></span><span x-text="h.message"></span><code x-text="h.short"></code><button class="linkbtn" type="button" @click="revert(h)">Revert</button></div></template>
+          <div class="empty" x-show="!history.length"><b>Nothing published yet</b>Each time you publish, a version appears here that you can go back to.</div>
+        </div>
+        <p class="hint" x-show="history.length">Revert brings content back to that version as unpublished changes. You review and publish it like any other edit.</p>
+      </div>
+    </template>
+
+    <!-- ================= SETUP ================= -->
+    <template x-if="view === 'setup' && setupState">
+      <div class="setup">
+        <div>
+          <h1>Set up the CMS</h1>
+          <p class="lead">This only happens once. Each step checks itself.</p>
+          <div class="stp" :class="setupState.folder.ok ? 'done' : 'bad'"><span class="n" x-text="setupState.folder.ok ? '✓' : '1'"></span><span><b>Portfolio folder</b><span class="s mono" x-text="setupState.folder.path"></span></span></div>
+          <div class="stp" :class="setupState.git.ok ? 'done' : 'bad'"><span class="n" x-text="setupState.git.ok ? '✓' : '2'"></span><span><b>Git</b>
+            <span class="s" x-text="setupState.git.ok ? `Git ${setupState.git.version} found` : 'Git is not installed.'"></span>
+            <span class="acts" x-show="!setupState.git.ok"><a class="btn sm" href="https://git-scm.com/download/win" target="_blank" rel="noopener">Get Git for Windows ↗</a><button class="btn sm ghost" type="button" @click="loadSetup()">Check again</button></span></span></div>
+          <div class="stp" :class="setupState.repo.hasHead ? 'done' : ''"><span class="n" x-text="setupState.repo.hasHead ? '✓' : '3'"></span><span><b>First version</b>
+            <span class="s" x-text="setupState.repo.hasHead ? 'History started' : 'Saves the current content as the first version in history.'"></span>
+            <span class="acts" x-show="!setupState.repo.hasHead"><button class="btn sm" type="button" @click="setupAction('init')" :disabled="setupForm.busy" x-text="setupForm.busy === 'init' ? 'Saving…' : 'Save first version'"></button></span></span></div>
+          <div class="stp" :class="setupState.github.ok ? 'done' : (setupState.github.url ? 'bad' : '')"><span class="n" x-text="setupState.github.ok ? '✓' : '4'"></span><span><b>GitHub</b>
+            <span class="s" x-show="setupState.github.ok" x-text="`Connected to ${setupState.github.url}`"></span>
+            <span class="s" x-show="!setupState.github.ok && setupState.github.url" x-text="`Can't reach ${setupState.github.url}. ${setupState.github.message}`"></span>
+            <span class="s" x-show="!setupState.github.url">Publishing pushes to a GitHub repository, which Cloudflare Pages turns into the live site. You can skip this and connect later in Settings.</span>
+            <template x-if="!setupState.github.ok">
+              <span>
+                <span class="acts" x-show="setupState.github.ghAvailable"><input type="text" x-model="setupForm.repoName" aria-label="Repository name" style="width:180px"><select x-model="setupForm.visibility" style="width:110px" aria-label="Visibility"><option value="private">Private</option><option value="public">Public</option></select><button class="btn sm" type="button" @click="setupAction('gh')" :disabled="setupForm.busy" x-text="setupForm.busy === 'gh' ? 'Creating…' : 'Create on GitHub'"></button></span>
+                <span class="acts"><input type="url" class="mono" x-model="setupForm.remote" placeholder="https://github.com/you/portfolio.git" aria-label="Existing repository address"><button class="btn sm" type="button" @click="setupAction('remote')" :disabled="setupForm.busy || !setupForm.remote">Use existing</button></span>
+              </span>
+            </template></span></div>
+          <div class="stp" :class="setupState.preview.ok ? 'done' : ''"><span class="n" x-text="setupState.preview.ok ? '✓' : '5'"></span><span><b>Preview</b>
+            <span class="s" x-text="setupState.preview.ok ? `Running on ${setupState.preview.url}` : 'Starting…'"></span>
+            <span class="acts" x-show="!setupState.preview.ok"><button class="btn sm ghost" type="button" @click="setupAction('preview')">Check again</button></span></span></div>
+          <div class="stp" :class="setupState.shortcut.ok ? 'done' : ''"><span class="n" x-text="setupState.shortcut.ok ? '✓' : '6'"></span><span><b>Desktop shortcut</b>
+            <span class="s" x-show="setupState.shortcut.ok">"Portfolio CMS" is on your desktop</span>
+            <label class="chk" x-show="!setupState.shortcut.ok" style="margin-top:6px;display:flex"><input type="checkbox" x-model="setupForm.shortcut">Add "Portfolio CMS" to the desktop</label></span></div>
+          <p class="badline" x-show="setupForm.error" x-text="setupForm.error" style="margin-top:14px"></p>
+          <div class="fin"><button class="btn pri" type="button" @click="finishSetup()" :disabled="setupForm.busy || !setupState.git.ok" x-text="setupForm.busy === 'finish' ? 'Finishing…' : 'Open CMS'"></button><span x-text="setupState.github.ok ? '' : 'You can connect GitHub later from Settings.'"></span></div>
+        </div>
+        <div class="aside">
+          <h2>Good to know</h2>
+          <dl>
+            <div><dt>Where content lives</dt><dd>Plain files in this folder. Publishing commits them to git and pushes to GitHub.</dd></div>
+            <div><dt>GitHub sign-in</dt><dd>Handled by Git's own login window. The CMS never sees your password.</dd></div>
+            <div><dt>Going live</dt><dd>After setup, open <b>Hosting</b> in the sidebar to connect Cloudflare and your domain.</dd></div>
+          </dl>
+          <h2>What's in the folder</h2>
+<pre>content/      your text and settings
+site/public/  photos, screenshots, résumé
+site/         the Astro site
+cms/          this app</pre>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <!-- preview -->
+  <section class="pv" x-show="view !== 'setup'" aria-label="Preview">
+    <div class="pvh">
+      <template x-if="view !== 'settings'">
+        <span class="seg"><button type="button" :class="{ on: previewMode === 'desktop' }" @click="previewMode = 'desktop'">Desktop</button><button type="button" :class="{ on: previewMode === 'phone' }" @click="previewMode = 'phone'">Phone</button></span>
+      </template>
+      <span x-show="view === 'settings'">How the site appears when shared</span>
+      <span class="u" x-show="view !== 'settings'" x-text="preview.url ? preview.url.replace('http://', '') + previewPath : ''"></span>
+      <a class="o" x-show="preview.url && view !== 'settings'" :href="preview.url + previewPath" target="_blank" rel="noopener">Open in browser ↗</a>
+    </div>
+    <div class="pvb" :class="{ phone: previewMode === 'phone', share: view === 'settings' }" x-ref="pvb">
+      <template x-if="view === 'settings' && form">
+        <div style="display:contents">
+          <div><div class="lb">Google</div><div class="serp"><div class="u" x-text="(form.settings.siteUrl || '').replace(/^https?:\/\//, '')"></div><div class="t" x-text="form.settings.title"></div><div class="d" x-text="form.settings.description"></div></div></div>
+          <div><div class="lb">LinkedIn, WhatsApp, Discord</div><div class="lcard"><img :src="`/site/og.png?t=${nonce}`" alt="" onerror="this.style.visibility='hidden'" onload="this.style.visibility='visible'"><div class="m"><span x-text="form.settings.title"></span><div x-text="(form.settings.siteUrl || '').replace(/^https?:\/\//, '')"></div></div></div></div>
+        </div>
+      </template>
+      <template x-if="view !== 'settings' && preview.status === 'running'">
+        <iframe :src="previewSrc" :style="frameStyle" title="Site preview"></iframe>
+      </template>
+      <template x-if="view !== 'settings' && preview.status === 'starting'">
+        <div class="pvdead"><b>Starting the preview…</b>This takes a few seconds.</div>
+      </template>
+      <template x-if="view !== 'settings' && preview.status === 'stopped'">
+        <div class="pvdead"><b>The preview stopped</b>Your content is safe.<code x-text="preview.log.slice(-6).join('\n') || 'No output.'"></code><button class="btn sm" type="button" @click="restartPreview()">Restart preview</button></div>
+      </template>
+    </div>
+  </section>
+
+  <!-- bottom bar -->
+  <footer class="bb" x-show="view !== 'setup'">
+    <span class="n" :class="barView.tone" x-text="barView.text"></span>
+    <span class="w" x-text="barView.sub" :title="barView.sub"></span>
+    <div class="r">
+      <template x-for="a in (barView.actions || []).filter((a) => a.show !== false)" :key="a.label">
+        <span style="display:contents">
+          <template x-if="a.href"><a class="btn" :class="a.kind" :href="a.href" target="_blank" rel="noopener" x-text="a.label"></a></template>
+          <template x-if="!a.href"><button class="btn" type="button" :class="a.kind" @click="a.fn()" :disabled="!!busy" x-text="a.label"></button></template>
+        </span>
+      </template>
+    </div>
+  </footer>
+</div>
+
+<!-- maintenance dialog -->
+<template x-if="modal">
+  <div class="ov" @click.self="modal = null">
+    <div class="mdl" role="dialog" aria-modal="true" :aria-label="modal === 'maint-on' ? 'Turn on maintenance mode' : 'Turn off maintenance mode'" x-init="$nextTick(() => $el.querySelector('.btn.dark').focus())">
+      <template x-if="modal === 'maint-on'">
+        <div>
+          <h2>Turn on maintenance mode?</h2>
+          <p x-text="`Visitors to ${(data.settings?.siteUrl || '').replace(/^https?:\/\//, '')} will see this message instead of your portfolio, about a minute after you confirm.`"></p>
+          <div class="q" x-text="data.status?.message"></div>
+          <ul>
+            <li>Publishes right away</li>
+            <li x-show="changes.items.length" x-text="`Your ${changes.items.length} unpublished change${changes.items.length === 1 ? '' : 's'} stay unpublished`"></li>
+            <li>Your content isn't changed. Turn it off the same way</li>
+          </ul>
+          <p class="help" x-show="dirty" style="margin-top:10px">Unsaved edits to the message aren't included. Save first to use them.</p>
+        </div>
+      </template>
+      <template x-if="modal === 'maint-off'">
+        <div><h2>Turn off maintenance mode?</h2><p x-text="`Your full portfolio will be back on ${(data.settings?.siteUrl || '').replace(/^https?:\/\//, '')} in about a minute.`"></p></div>
+      </template>
+      <div class="act"><button class="btn ghost" type="button" @click="modal = null">Cancel</button><button class="btn dark" type="button" @click="setMaintenance(modal === 'maint-on')" x-text="modal === 'maint-on' ? 'Turn on' : 'Turn off'"></button></div>
+    </div>
+  </div>
+</template>
+
+<div class="toast" x-show="toast" x-text="toast" x-transition.opacity role="status" x-cloak></div>
+</body>
+</html>

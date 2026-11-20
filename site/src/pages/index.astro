@@ -1,0 +1,123 @@
+---
+import Base from '../layouts/Base.astro';
+import Identity from '../components/Identity.astro';
+import Maintenance from '../components/Maintenance.astro';
+import { readAll } from '../../../schema/read.js';
+import { formatRange, siteBase } from '../../../schema/content.js';
+import { iconSvg, iconHex } from '../../../schema/icons.js';
+import { responsive } from '../../../schema/images.js';
+
+const content = readAll();
+const { profile, projects, experience, toolkit, settings, status } = content;
+const shownProjects = await Promise.all(projects.filter((p) => p.show).map(async (p) => ({ ...p, img: await responsive(p.image) })));
+const shownExperience = experience.filter((e) => e.show);
+const links = profile.links.filter((l) => l.show);
+const groups = toolkit.groups.filter((g) => g.items.length);
+// Structured data so search engines know who this page is about.
+const base = siteBase(settings);
+const jsonld = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  ...(base && { url: `${base}/` }),
+  mainEntity: {
+    '@type': 'Person',
+    name: profile.name,
+    jobTitle: profile.role,
+    ...(base && { url: `${base}/` }),
+    ...(profile.bio && { description: profile.bio }),
+    ...(base && profile.photo.src && { image: `${base}${profile.photo.src}` }),
+    ...(profile.email.show && profile.email.value && { email: `mailto:${profile.email.value}` }),
+    ...(links.length && { sameAs: links.map((l) => l.url) }),
+    ...(profile.details.location.show && profile.details.location.value && { homeLocation: { '@type': 'Place', name: profile.details.location.value } }),
+  },
+};
+---
+{status.maintenance ? <Maintenance content={content} /> : (
+<Base settings={settings} jsonld={jsonld}>
+  <a class="skip" href="#work">Skip to work</a>
+  <div class="page">
+    <aside class="side" data-hl="profile">
+      <Identity profile={profile} />
+      {profile.bio && <p class="bio">{profile.bio}</p>}
+      {profile.availability.show && profile.availability.text && <p class="avail">{profile.availability.text}</p>}
+      <ul class="links">
+        {profile.resume.show && profile.resume.src && <li><a href={profile.resume.src}>Résumé ↓</a></li>}
+        {links.map((l) => <li><a href={l.url} rel="me noopener">{l.label} ↗</a></li>)}
+        {profile.email.show && profile.email.value && <li><a href={`mailto:${profile.email.value}`}>{profile.email.value}</a></li>}
+      </ul>
+    </aside>
+
+    <main id="work">
+      {shownProjects.length > 0 && (
+        <section aria-labelledby="h-work">
+          <h2 id="h-work">Work</h2>
+          {shownProjects.map((p) => (
+            <article class={`row${p.image ? ' has-img' : ''}`} data-hl={`projects/${p.slug}`}>
+              <div class="t">
+                <h3>{p.writeup ? <a href={`/projects/${p.slug}/`}>{p.title}</a> : p.title}</h3>
+                <span class="when">{p.year}</span>
+                <p>{p.summary}</p>
+                <div class="meta">
+                  {p.stack && <span>{p.stack.split(',').map((s) => s.trim()).filter(Boolean).join(' · ')}</span>}
+                  {p.live && <a href={p.live} rel="noopener">Live ↗</a>}
+                  {p.code && <a href={p.code} rel="noopener">Code ↗</a>}
+                  {p.writeup && <a href={`/projects/${p.slug}/`}>Write-up →</a>}
+                </div>
+              </div>
+              {p.image && <img class="thumb" src={p.image} srcset={p.img.srcset} sizes="(max-width: 860px) 96px, 200px" alt="" loading="lazy" decoding="async" width="200" height="125" />}
+            </article>
+          ))}
+        </section>
+      )}
+
+      {shownExperience.length > 0 && (
+        <section aria-labelledby="h-exp">
+          <h2 id="h-exp">Experience</h2>
+          {shownExperience.map((e) => (
+            <article class="row" data-hl={`experience/${e.slug}`}>
+              <div class="t">
+                <h3>{e.writeup ? <a href={`/experience/${e.slug}/`}>{e.title}</a> : e.title}</h3>
+                <span class="when">{formatRange(e.start, e.end)}</span>
+                {(e.org || e.description) && (
+                  <p>{e.org && <span class="org">{e.org}{e.description ? '. ' : ''}</span>}{e.description}</p>
+                )}
+                {(e.link || e.writeup) && (
+                  <div class="meta">
+                    {e.link && <a href={e.link} rel="noopener">{new URL(e.link).hostname.replace(/^www\./, '')} ↗</a>}
+                    {e.writeup && <a href={`/experience/${e.slug}/`}>Write-up →</a>}
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+
+      {groups.length > 0 && (
+        <section aria-labelledby="h-tk" data-hl="toolkit">
+          <h2 id="h-tk">Toolkit</h2>
+          <dl class={`toolkit${toolkit.icons ? '' : ' no-icons'}`}>
+            {groups.map((g) => (
+              <>
+                <dt>{g.label}</dt>
+                <dd>
+                  {g.items.map((it, i) => {
+                    const svg = toolkit.icons ? iconSvg(it.icon) : '';
+                    const hex = toolkit.iconStyle === 'brand' ? iconHex(it.icon) : null;
+                    return (
+                      <span class="item">
+                        {svg && <span class="ic" style={hex ? `color:${hex}` : undefined} set:html={svg} />}
+                        {it.name}{i < g.items.length - 1 && <span class="sep">, </span>}
+                      </span>
+                    );
+                  })}
+                </dd>
+              </>
+            ))}
+          </dl>
+        </section>
+      )}
+    </main>
+  </div>
+</Base>
+)}

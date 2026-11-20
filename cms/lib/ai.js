@@ -25,10 +25,29 @@ function storeAppFolder() {
   return null;
 }
 
+/**
+ * Newer versions of the Windows app move all their data to %LOCALAPPDATA%\Claude-Data\claude_<id>,
+ * leaving a ".user-data-left" marker in the old folder. When that folder exists, it holds the settings
+ * file Claude actually reads.
+ */
+function claudeDataFolder() {
+  const base = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Claude-Data');
+  try {
+    const dirs = readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory() && /^claude/i.test(d.name));
+    // Prefer the one with a settings file; otherwise the first.
+    const withConfig = dirs.find((d) => existsSync(join(base, d.name, 'claude_desktop_config.json')));
+    const pick = withConfig || dirs[0];
+    if (pick) return join(base, pick.name);
+  } catch {}
+  return null;
+}
+
 /** Claude Desktop's settings file. PORTFOLIO_CLAUDE_CONFIG points elsewhere (used for testing). */
 export function configPath() {
   if (process.env.PORTFOLIO_CLAUDE_CONFIG) return process.env.PORTFOLIO_CLAUDE_CONFIG;
   if (process.platform === 'win32') {
+    const data = claudeDataFolder();
+    if (data) return join(data, 'claude_desktop_config.json');
     const store = storeAppFolder();
     if (store) return join(store, 'claude_desktop_config.json');
     return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');

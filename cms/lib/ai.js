@@ -1,6 +1,6 @@
 // Connect this portfolio's MCP server (cms/mcp.js) to Claude Desktop by adding one entry to its settings file.
 // Only the "portfolio" entry that points at this folder is ever added or removed; everything else is kept.
-import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { ROOT } from '../../schema/read.js';
@@ -8,10 +8,31 @@ import { ROOT } from '../../schema/read.js';
 const NAME = 'portfolio';
 const SERVER = join(ROOT, 'cms', 'mcp.js');
 
+/**
+ * The Microsoft Store version of Claude Desktop keeps its settings in its own package folder:
+ * %LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Roaming\Claude. Windows shows that folder to the app as
+ * %APPDATA%\Claude, but other programs (like this CMS) only see it at the package path.
+ */
+function storeAppFolder() {
+  const packages = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Packages');
+  try {
+    for (const name of readdirSync(packages)) {
+      if (!/^Claude_/i.test(name)) continue;
+      const dir = join(packages, name, 'LocalCache', 'Roaming', 'Claude');
+      if (existsSync(dir)) return dir;
+    }
+  } catch {}
+  return null;
+}
+
 /** Claude Desktop's settings file. PORTFOLIO_CLAUDE_CONFIG points elsewhere (used for testing). */
 export function configPath() {
   if (process.env.PORTFOLIO_CLAUDE_CONFIG) return process.env.PORTFOLIO_CLAUDE_CONFIG;
-  if (process.platform === 'win32') return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  if (process.platform === 'win32') {
+    const store = storeAppFolder();
+    if (store) return join(store, 'claude_desktop_config.json');
+    return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  }
   if (process.platform === 'darwin') return join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
   return join(homedir(), '.config', 'Claude', 'claude_desktop_config.json');
 }

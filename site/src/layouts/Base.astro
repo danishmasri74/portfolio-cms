@@ -32,7 +32,7 @@ const theme = readSingle('theme');
 const colors = themeColors(theme);
 ---
 <!doctype html>
-<html lang="en" data-layout={theme.layout} data-photo={theme.photo} data-density={theme.density}>
+<html lang="en" data-layout={theme.layout} data-photo={theme.photo} data-density={theme.density} data-projects={theme.projects} data-links={theme.links} data-accent={theme.accentStrength} data-motion={String(theme.motion)}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

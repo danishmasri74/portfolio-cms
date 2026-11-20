@@ -22,6 +22,8 @@ export const profileSchema = z.object({
   name: z.string().trim().min(1, 'Enter your name.').max(60),
   role: z.string().trim().min(1, 'Enter a role, like "Software engineering student".').max(80),
   bio: z.string().trim().max(400, 'Keep the bio under 400 characters.').default(''),
+  // One line shown big above the work. Optional.
+  headline: z.string().trim().max(120, 'Keep the headline under 120 characters.').default(''),
   photo: z
     .object({ src: imagePath, focusX: z.number().min(0).max(100).default(50), focusY: z.number().min(0).max(100).default(30) })
     .default({ src: null, focusX: 50, focusY: 30 }),
@@ -126,7 +128,45 @@ export const themeSchema = z.object({
   density: z.enum(['comfortable', 'compact']).default('comfortable'),
   // Letters on the browser-tab icon. Empty = first letters of the first and last name.
   monogram: z.string().trim().max(2, 'Use one or two letters.').default(''),
+  projects: z.enum(['rows', 'feature', 'grid']).default('rows'),
+  links: z.enum(['text', 'icons', 'button']).default('text'),
+  accentStrength: z.enum(['subtle', 'bold']).default('subtle'),
+  motion: z.boolean().default(false),
 });
+
+// Section names and order, plus the owner's own sections (a paragraph or a simple list).
+export const BUILT_IN_SECTIONS = ['work', 'experience', 'toolkit'];
+const sectionItem = z.object({
+  title: z.string().trim().min(1, 'Enter a title.').max(80),
+  when: z.string().trim().max(30).default(''),
+  description: z.string().trim().max(180, 'Keep it under 180 characters.').default(''),
+  link: url.default(''),
+});
+const customSection = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+  title: z.string().trim().min(1, 'Name the section.').max(30, 'Keep the name under 30 characters.'),
+  kind: z.enum(['text', 'list']).default('list'),
+  show: z.boolean().default(true),
+  text: z.string().trim().max(600, 'Keep it under 600 characters.').default(''),
+  items: z.array(sectionItem).max(30).default([]),
+});
+const label = (fallback) => z.string().trim().max(30, 'Keep the name under 30 characters.').default(fallback).transform((v) => v || fallback);
+export const sectionsSchema = z
+  .object({
+    order: z.array(z.string()).default(BUILT_IN_SECTIONS),
+    labels: z
+      .object({ work: label('Work'), experience: label('Experience'), toolkit: label('Toolkit') })
+      .default({ work: 'Work', experience: 'Experience', toolkit: 'Toolkit' }),
+    custom: z.array(customSection).max(8, 'Up to 8 of your own sections.').default([]),
+  })
+  .refine((s) => new Set(s.custom.map((c) => c.id)).size === s.custom.length, { message: 'Two sections have the same id.', path: ['custom'] })
+  // Keep the order honest: drop unknown ids and add any missing section at the end, so nothing disappears by accident.
+  .transform((s) => {
+    const ids = [...BUILT_IN_SECTIONS, ...s.custom.map((c) => c.id)];
+    const order = [...new Set(s.order.filter((id) => ids.includes(id)))];
+    for (const id of ids) if (!order.includes(id)) order.push(id);
+    return { ...s, order };
+  });
 
 export const schemas = {
   profile: profileSchema,
@@ -134,6 +174,7 @@ export const schemas = {
   settings: settingsSchema,
   status: statusSchema,
   theme: themeSchema,
+  sections: sectionsSchema,
   projects: projectSchema,
   experience: experienceSchema,
 };

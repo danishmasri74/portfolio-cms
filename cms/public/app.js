@@ -180,7 +180,7 @@ document.addEventListener('alpine:init', () => {
       const [a = 'projects', b, c] = parts;
       if (a === 'projects' && b) return { view: 'project', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
       if (a === 'experience' && b) return { view: 'exp', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
-      const views = ['projects', 'experience', 'profile', 'toolkit', 'appearance', 'settings', 'history', 'review', 'setup', 'hosting'];
+      const views = ['projects', 'experience', 'profile', 'toolkit', 'sections', 'appearance', 'settings', 'history', 'review', 'setup', 'hosting'];
       return { view: views.includes(a) ? a : 'projects', slug: null, isNew: false, tab: 'details' };
     },
     hashFor(t) {
@@ -250,6 +250,9 @@ document.addEventListener('alpine:init', () => {
           const { data } = await api('GET', '/api/toolkit');
           this.form = data;
           this.ensureSvgs(data.groups.flatMap((g) => g.items.map((i) => i.icon)));
+        } else if (this.view === 'sections') {
+          this.form = (await api('GET', '/api/sections')).data;
+          this.openSec = null;
         } else if (this.view === 'appearance') {
           const [t, opts] = await Promise.all([api('GET', '/api/theme'), this.themeOpts ? null : api('GET', '/api/theme/options')]);
           if (opts) this.themeOpts = opts;
@@ -297,11 +300,11 @@ document.addEventListener('alpine:init', () => {
       return !!this.form && (JSON.stringify(this.form) !== this.snap || this.writeup !== this.writeupSnap);
     },
     get canSave() {
-      return ['project', 'exp', 'profile', 'toolkit', 'appearance', 'settings'].includes(this.view) && !!this.form;
+      return ['project', 'exp', 'profile', 'toolkit', 'sections', 'appearance', 'settings'].includes(this.view) && !!this.form;
     },
     get formName() {
       if (this.view === 'project' || this.view === 'exp') return this.form?.title || (this.isNew ? 'the new entry' : 'this entry');
-      return { profile: 'Profile', toolkit: 'Toolkit', appearance: 'Appearance', settings: 'Settings' }[this.view] || '';
+      return { profile: 'Profile', toolkit: 'Toolkit', sections: 'Sections', appearance: 'Appearance', settings: 'Settings' }[this.view] || '';
     },
     resetDirty() {
       this.snap = this.form ? JSON.stringify(this.form) : '';
@@ -350,6 +353,8 @@ document.addEventListener('alpine:init', () => {
           clean.groups.forEach((g) => g.items.forEach((it) => delete it.auto));
           this.form = (await api('PUT', '/api/toolkit', clean)).data;
           this.ensureSvgs(this.form.groups.flatMap((g) => g.items.map((i) => i.icon)));
+        } else if (this.view === 'sections') {
+          this.form = (await api('PUT', '/api/sections', this.form)).data;
         } else if (this.view === 'appearance') {
           this.form = (await api('PUT', '/api/theme', this.form)).data;
         } else if (this.view === 'settings') {
@@ -456,6 +461,8 @@ document.addEventListener('alpine:init', () => {
       if (list === 'links') return this.form.links;
       if (list === 'groups') return this.form.groups;
       if (list.startsWith('items:')) return this.form.groups[Number(list.slice(6))].items;
+      if (list === 'order') return this.form.order;
+      if (list.startsWith('secitems:')) return this.sec(list.slice(9))?.items || [];
       return [];
     },
 
@@ -622,6 +629,40 @@ document.addEventListener('alpine:init', () => {
       item.icon = icon ? { set: icon.set, name: icon.name } : null;
       item.auto = false;
       this.picker.open = false;
+    },
+
+    // ---------- sections ----------
+    openSec: null,
+    isBuiltIn(id) {
+      return ['work', 'experience', 'toolkit'].includes(id);
+    },
+    builtInName(id) {
+      return { work: 'Work', experience: 'Experience', toolkit: 'Toolkit' }[id];
+    },
+    builtInWhat(id) {
+      return { work: 'Your projects', experience: 'Your experience', toolkit: 'Your toolkit' }[id];
+    },
+    sec(id) {
+      return this.form?.custom?.find((c) => c.id === id);
+    },
+    secIndex(id) {
+      return this.form.custom.findIndex((c) => c.id === id);
+    },
+    addSection(kind) {
+      if (this.form.custom.length >= 8) return this.flash('Up to 8 of your own sections.');
+      const id = 's' + Date.now().toString(36);
+      this.form.custom.push({ id, title: '', kind, show: true, text: '', items: kind === 'list' ? [{ title: '', when: '', description: '', link: '' }] : [] });
+      this.form.order.push(id);
+      this.openSec = id;
+      this.$nextTick(() => document.getElementById(`sec-t-${id}`)?.focus());
+    },
+    removeSection(id) {
+      const s = this.sec(id);
+      this.confirmBar(`Remove ${s?.title || 'this section'}?`, 'It goes when you save. You can still Cancel before that.', 'Remove', () => {
+        this.form.custom.splice(this.secIndex(id), 1);
+        this.form.order.splice(this.form.order.indexOf(id), 1);
+        if (this.openSec === id) this.openSec = null;
+      });
     },
 
     // ---------- appearance ----------

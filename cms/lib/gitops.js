@@ -37,7 +37,7 @@ async function showHead(path) {
 }
 
 const LABELS = {
-  profile: 'Profile', toolkit: 'Toolkit', settings: 'Settings', status: 'Maintenance page', theme: 'Appearance',
+  profile: 'Profile', toolkit: 'Toolkit', settings: 'Settings', status: 'Maintenance page', theme: 'Appearance', sections: 'Sections',
 };
 const FIELD_NAMES = {
   title: 'title', year: 'year', summary: 'summary', stack: 'stack', live: 'live link', code: 'code link', image: 'image',
@@ -47,13 +47,13 @@ const FIELD_NAMES = {
   groups: 'groups', shareImage: 'share image', checkBeforePublish: 'check setting', quickPublish: 'quick publish',
   siteUrl: 'site address', domainRenews: 'renewal date', maintenance: 'maintenance mode', message: 'message', showEmail: 'email', showResume: 'résumé',
   showPhoto: 'photo', showLinks: 'links',
-  palette: 'palette', mode: 'light or dark', accent: 'accent colour', fonts: 'fonts', layout: 'layout', density: 'spacing', monogram: 'icon letters',
+  palette: 'palette', mode: 'light or dark', accent: 'accent colour', fonts: 'fonts', layout: 'layout', density: 'spacing', monogram: 'icon letters', headline: 'headline', projects: 'project layout', accentStrength: 'accent strength', motion: 'motion', order: 'order', labels: 'section names', custom: 'your sections',
 };
 
 /** Which item a changed file belongs to. */
 function itemFor(path) {
   let m;
-  if ((m = path.match(/^content\/(profile|toolkit|settings|status|theme)\.json$/))) return { key: m[1], kind: 'single', name: m[1] };
+  if ((m = path.match(/^content\/(profile|toolkit|settings|status|theme|sections)\.json$/))) return { key: m[1], kind: 'single', name: m[1] };
   if (path === 'site/public/favicon.svg') return { key: 'theme', kind: 'single', name: 'theme' };
   if ((m = path.match(/^content\/(projects|experience)\/([a-z0-9-]+)\.(json|md)$/))) return { key: `${m[1]}/${m[2]}`, kind: m[1], slug: m[2] };
   if ((m = path.match(/^site\/public\/images\/projects\/([a-z0-9-]+?)-[0-9a-f]{8}(?:-\d+w)?\.webp$/))) return { key: `projects/${m[1]}`, kind: 'projects', slug: m[1] };

@@ -1,0 +1,5 @@
+{
+  "order": ["work", "experience", "toolkit"],
+  "labels": { "work": "Work", "experience": "Experience", "toolkit": "Toolkit" },
+  "custom": []
+}

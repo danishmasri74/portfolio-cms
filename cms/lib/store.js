@@ -5,7 +5,7 @@ import { schemas, fieldErrors, slugify } from '../../schema/content.js';
 import { CONTENT, readCollection, readSingle } from '../../schema/read.js';
 import { matchIcon } from '../../schema/icons.js';
 
-export const SINGLES = ['profile', 'toolkit', 'settings', 'status', 'theme'];
+export const SINGLES = ['profile', 'toolkit', 'settings', 'status', 'theme', 'sections'];
 export const COLLECTIONS = ['projects', 'experience'];
 
 const jsonPath = (name) => join(CONTENT, `${name}.json`);

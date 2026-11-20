@@ -171,6 +171,24 @@ input::placeholder, textarea::placeholder { color: #a8aaad; }
 .seg button { border: 0; background: #fff; padding: 3px 10px; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--text); color: #fff; }
 
+/* sections */
+.secs { display: grid; gap: 8px; }
+.sec { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; display: grid; gap: 8px; }
+.sec.over { box-shadow: inset 0 2px 0 var(--accent); }
+.sec.off .sec-h input { color: var(--faint); }
+.sec-h { display: flex; align-items: center; gap: 10px; }
+.sec-h input { flex: 1; min-width: 0; max-width: 260px; }
+.sec-k { font-size: 12px; color: var(--faint); flex: 1; }
+.sec-a { display: flex; align-items: center; gap: 8px; }
+.sec-b { display: grid; gap: 12px; padding: 4px 0 4px 30px; }
+.sec-b > .seg { justify-self: start; }
+.sec-items { display: grid; gap: 8px; }
+.sit { display: grid; grid-template-columns: 20px minmax(0, 1fr) 28px; gap: 8px; align-items: start; padding-top: 4px; }
+.sit.over { box-shadow: inset 0 2px 0 var(--accent); }
+.sit .hd { padding-top: 8px; }
+.sit-f { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 6px; }
+.sit-f input:nth-child(3), .sit-f input:nth-child(4) { grid-column: 1 / -1; }
+
 /* appearance */
 .f > .seg { justify-self: start; }
 .pals, .fonts, .lays, .accs { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -199,6 +217,16 @@ input::placeholder, textarea::placeholder { color: #a8aaad; }
 .lay-d.mid { flex-direction: column; align-items: center; padding: 6px 22px; gap: 4px; }
 .lay-d.mid i { width: 100%; height: 12px; }
 .lay-d.mid > span { width: 100%; }
+.lay-d.prj { flex-direction: column; gap: 5px; }
+.lay-d.prj u { width: 100%; }
+.lay-d.prj.rows > span { display: flex; gap: 6px; align-items: center; }
+.lay-d.prj.rows b { flex: 1; display: grid; gap: 4px; }
+.lay-d.prj.rows i { width: 26px; height: 18px; }
+.lay-d.prj.feature i { width: 100%; height: 26px; }
+.lay-d.prj.feature u:last-child { width: 60%; }
+.lay-d.prj.grid { flex-direction: row; }
+.lay-d.prj.grid > span { flex: 1; display: grid; gap: 4px; align-content: start; }
+.lay-d.prj.grid i { width: 100%; height: 30px; }
 .tgrp { border-top: 1px solid var(--line); padding: 14px 0 12px; }
 .tgrp.over { box-shadow: inset 0 2px 0 var(--accent); }
 .tgh { display: grid; grid-template-columns: 20px 220px 28px; gap: 8px; align-items: center; margin-bottom: 10px; }

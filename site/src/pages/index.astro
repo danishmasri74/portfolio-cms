@@ -4,16 +4,41 @@ import Identity from '../components/Identity.astro';
 import Maintenance from '../components/Maintenance.astro';
 import { readAll } from '../../../schema/read.js';
 import { formatRange, siteBase } from '../../../schema/content.js';
-import { iconSvg, iconHex } from '../../../schema/icons.js';
+import { iconSvg, iconHex, matchIcon } from '../../../schema/icons.js';
 import { logoVisibility } from '../../../schema/theme.js';
 import { responsive } from '../../../schema/images.js';
 
 const content = readAll();
-const { profile, projects, experience, toolkit, settings, status, theme } = content;
+const { profile, projects, experience, toolkit, settings, status, theme, sections } = content;
 const shownProjects = await Promise.all(projects.filter((p) => p.show).map(async (p) => ({ ...p, img: await responsive(p.image) })));
 const shownExperience = experience.filter((e) => e.show);
 const links = profile.links.filter((l) => l.show);
 const groups = toolkit.groups.filter((g) => g.items.length);
+const custom = Object.fromEntries(sections.custom.filter((c) => c.show && (c.kind === 'text' ? c.text : c.items.length)).map((c) => [c.id, c]));
+const hostOf = (u) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+// Sidebar link icons (Appearance → Sidebar links). Matched from the label, then the address.
+const lucide = (name) => iconSvg({ set: 'lucide', name });
+function linkIcon(l) {
+  const host = hostOf(l.url);
+  if (/linkedin\./.test(host) || /linkedin/i.test(l.label)) return lucide('briefcase-business');
+  if (/^(twitter|x)\.com$/.test(host)) return iconSvg({ set: 'si', name: 'x' });
+  const m = matchIcon(l.label) || (host && matchIcon(host.split('.').at(-2) || ''));
+  return (m && iconSvg(m)) || lucide('globe');
+}
+const email = profile.email.show && profile.email.value ? profile.email.value : '';
+const resume = profile.resume.show && profile.resume.src ? profile.resume.src : '';
+const contact = email ? `mailto:${email}` : links[0]?.url || '';
+
+// Project images: sized for the chosen layout.
+const imgSizes = { rows: '(max-width: 860px) 96px, 200px', feature: '(max-width: 860px) 100vw, 760px', grid: '(max-width: 560px) 100vw, 380px' }[theme.projects];
+
 // Structured data so search engines know who this page is about.
 const base = siteBase(settings);
 const jsonld = {
@@ -27,7 +52,7 @@ const jsonld = {
     ...(base && { url: `${base}/` }),
     ...(profile.bio && { description: profile.bio }),
     ...(base && profile.photo.src && { image: `${base}${profile.photo.src}` }),
-    ...(profile.email.show && profile.email.value && { email: `mailto:${profile.email.value}` }),
+    ...(email && { email: `mailto:${email}` }),
     ...(links.length && { sameAs: links.map((l) => l.url) }),
     ...(profile.details.location.show && profile.details.location.value && { homeLocation: { '@type': 'Place', name: profile.details.location.value } }),
   },
@@ -41,85 +66,114 @@ const jsonld = {
       <Identity profile={profile} />
       {profile.bio && <p class="bio">{profile.bio}</p>}
       {profile.availability.show && profile.availability.text && <p class="avail">{profile.availability.text}</p>}
+      {contact && (
+        <div class="cta">
+          <a class="pri" href={contact} rel={email ? undefined : 'me noopener'}>Get in touch</a>
+          {resume && <a class="sec" href={resume}>Résumé ↓</a>}
+        </div>
+      )}
       <ul class="links">
-        {profile.resume.show && profile.resume.src && <li><a href={profile.resume.src}>Résumé ↓</a></li>}
-        {links.map((l) => <li><a href={l.url} rel="me noopener">{l.label} ↗</a></li>)}
-        {profile.email.show && profile.email.value && <li><a href={`mailto:${profile.email.value}`}>{profile.email.value}</a></li>}
+        {resume && <li class="resume"><a href={resume}><span class="ico" set:html={lucide('file-down')} /><span class="lbl">Résumé</span><span class="arr"> ↓</span></a></li>}
+        {links.map((l) => <li><a href={l.url} rel="me noopener" aria-label={l.label}><span class="ico" set:html={linkIcon(l)} /><span class="lbl">{l.label}</span><span class="arr"> ↗</span></a></li>)}
+        {email && <li class="email"><a href={`mailto:${email}`}><span class="ico" set:html={lucide('mail')} /><span class="lbl">{email}</span></a></li>}
       </ul>
     </aside>
 
     <main id="work">
-      {shownProjects.length > 0 && (
-        <section aria-labelledby="h-work">
-          <h2 id="h-work">Work</h2>
-          {shownProjects.map((p) => (
-            <article class={`row${p.image ? ' has-img' : ''}`} data-hl={`projects/${p.slug}`}>
-              <div class="t">
-                <h3>{p.writeup ? <a href={`/projects/${p.slug}/`}>{p.title}</a> : p.title}</h3>
-                <span class="when">{p.year}</span>
-                <p>{p.summary}</p>
-                <div class="meta">
-                  {p.stack && <span>{p.stack.split(',').map((s) => s.trim()).filter(Boolean).join(' · ')}</span>}
-                  {p.live && <a href={p.live} rel="noopener">Live ↗</a>}
-                  {p.code && <a href={p.code} rel="noopener">Code ↗</a>}
-                  {p.writeup && <a href={`/projects/${p.slug}/`}>Write-up →</a>}
-                </div>
-              </div>
-              {p.image && <img class="thumb" src={p.image} srcset={p.img.srcset} sizes="(max-width: 860px) 96px, 200px" alt="" loading="lazy" decoding="async" width="200" height="125" />}
-            </article>
-          ))}
-        </section>
-      )}
-
-      {shownExperience.length > 0 && (
-        <section aria-labelledby="h-exp">
-          <h2 id="h-exp">Experience</h2>
-          {shownExperience.map((e) => (
-            <article class="row" data-hl={`experience/${e.slug}`}>
-              <div class="t">
-                <h3>{e.writeup ? <a href={`/experience/${e.slug}/`}>{e.title}</a> : e.title}</h3>
-                <span class="when">{formatRange(e.start, e.end)}</span>
-                {(e.org || e.description) && (
-                  <p>{e.org && <span class="org">{e.org}{e.description ? '. ' : ''}</span>}{e.description}</p>
-                )}
-                {(e.link || e.writeup) && (
-                  <div class="meta">
-                    {e.link && <a href={e.link} rel="noopener">{new URL(e.link).hostname.replace(/^www\./, '')} ↗</a>}
-                    {e.writeup && <a href={`/experience/${e.slug}/`}>Write-up →</a>}
+      {profile.headline && <p class="intro">{profile.headline}</p>}
+      {sections.order.map((id) => {
+        if (id === 'work') return shownProjects.length > 0 && (
+          <section aria-labelledby="h-work">
+            <h2 id="h-work">{sections.labels.work}</h2>
+            <div class="projects">
+              {shownProjects.map((p) => (
+                <article class={`row${p.image ? ' has-img' : ''}`} data-hl={`projects/${p.slug}`}>
+                  <div class="t">
+                    <h3>{p.writeup ? <a href={`/projects/${p.slug}/`}>{p.title}</a> : p.title}</h3>
+                    <span class="when">{p.year}</span>
+                    <p>{p.summary}</p>
+                    <div class="meta">
+                      {p.stack && <span>{p.stack.split(',').map((s) => s.trim()).filter(Boolean).join(' · ')}</span>}
+                      {p.live && <a href={p.live} rel="noopener">Live ↗</a>}
+                      {p.code && <a href={p.code} rel="noopener">Code ↗</a>}
+                      {p.writeup && <a href={`/projects/${p.slug}/`}>Write-up →</a>}
+                    </div>
                   </div>
-                )}
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
-
-      {groups.length > 0 && (
-        <section aria-labelledby="h-tk" data-hl="toolkit">
-          <h2 id="h-tk">Toolkit</h2>
-          <dl class={`toolkit${toolkit.icons ? '' : ' no-icons'}`}>
-            {groups.map((g) => (
-              <>
-                <dt>{g.label}</dt>
-                <dd>
-                  {g.items.map((it, i) => {
-                    const svg = toolkit.icons ? iconSvg(it.icon) : '';
-                    const hex = toolkit.iconStyle === 'brand' ? iconHex(it.icon) : null;
-                    const seen = hex ? logoVisibility(hex, theme) : null;
-                    const cls = ['ic', hex && 'logo', seen?.lowLight && 'low-light', seen?.lowDark && 'low-dark'].filter(Boolean).join(' ');
-                    return (
-                      <span class="item">
-                        {svg && <span class={cls} style={hex ? `--logo:${hex}` : undefined} set:html={svg} />}
-                        {it.name}{i < g.items.length - 1 && <span class="sep">, </span>}
-                      </span>
-                    );
-                  })}
-                </dd>
-              </>
+                  {p.image && <img class="thumb" src={p.image} srcset={p.img.srcset} sizes={imgSizes} alt="" loading="lazy" decoding="async" width="200" height="125" />}
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+        if (id === 'experience') return shownExperience.length > 0 && (
+          <section aria-labelledby="h-exp">
+            <h2 id="h-exp">{sections.labels.experience}</h2>
+            {shownExperience.map((e) => (
+              <article class="row" data-hl={`experience/${e.slug}`}>
+                <div class="t">
+                  <h3>{e.writeup ? <a href={`/experience/${e.slug}/`}>{e.title}</a> : e.title}</h3>
+                  <span class="when">{formatRange(e.start, e.end)}</span>
+                  {(e.org || e.description) && (
+                    <p>{e.org && <span class="org">{e.org}{e.description ? '. ' : ''}</span>}{e.description}</p>
+                  )}
+                  {(e.link || e.writeup) && (
+                    <div class="meta">
+                      {e.link && <a href={e.link} rel="noopener">{hostOf(e.link)} ↗</a>}
+                      {e.writeup && <a href={`/experience/${e.slug}/`}>Write-up →</a>}
+                    </div>
+                  )}
+                </div>
+              </article>
             ))}
-          </dl>
-        </section>
-      )}
+          </section>
+        );
+        if (id === 'toolkit') return groups.length > 0 && (
+          <section aria-labelledby="h-tk" data-hl="toolkit">
+            <h2 id="h-tk">{sections.labels.toolkit}</h2>
+            <dl class={`toolkit${toolkit.icons ? '' : ' no-icons'}`}>
+              {groups.map((g) => (
+                <>
+                  <dt>{g.label}</dt>
+                  <dd>
+                    {g.items.map((it, i) => {
+                      const svg = toolkit.icons ? iconSvg(it.icon) : '';
+                      const hex = toolkit.iconStyle === 'brand' ? iconHex(it.icon) : null;
+                      const seen = hex ? logoVisibility(hex, theme) : null;
+                      const cls = ['ic', hex && 'logo', seen?.lowLight && 'low-light', seen?.lowDark && 'low-dark'].filter(Boolean).join(' ');
+                      return (
+                        <span class="item">
+                          {svg && <span class={cls} style={hex ? `--logo:${hex}` : undefined} set:html={svg} />}
+                          {it.name}{i < g.items.length - 1 && <span class="sep">, </span>}
+                        </span>
+                      );
+                    })}
+                  </dd>
+                </>
+              ))}
+            </dl>
+          </section>
+        );
+        // The owner's own sections: a paragraph or a simple list.
+        const c = custom[id];
+        if (!c) return null;
+        return (
+          <section aria-labelledby={`h-${c.id}`} data-hl={`sections/${c.id}`}>
+            <h2 id={`h-${c.id}`}>{c.title}</h2>
+            {c.kind === 'text'
+              ? <p class="ctext">{c.text}</p>
+              : c.items.map((it) => (
+                <article class="row">
+                  <div class="t">
+                    <h3>{it.link ? <a href={it.link} rel="noopener">{it.title}</a> : it.title}</h3>
+                    <span class="when">{it.when}</span>
+                    {it.description && <p>{it.description}</p>}
+                    {it.link && <div class="meta"><a href={it.link} rel="noopener">{hostOf(it.link)} ↗</a></div>}
+                  </div>
+                </article>
+              ))}
+          </section>
+        );
+      })}
     </main>
   </div>
 </Base>

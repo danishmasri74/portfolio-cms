@@ -68,6 +68,10 @@ export const DEFAULT_THEME = {
   photo: 'rounded',
   density: 'comfortable',
   monogram: '',
+  projects: 'rows',
+  links: 'text',
+  accentStrength: 'subtle',
+  motion: false,
 };
 
 // ---------- colour maths ----------

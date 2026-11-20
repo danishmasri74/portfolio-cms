@@ -6,5 +6,9 @@
   "layout": "sidebar",
   "photo": "rounded",
   "density": "comfortable",
-  "monogram": ""
+  "monogram": "",
+  "projects": "rows",
+  "links": "text",
+  "accentStrength": "subtle",
+  "motion": false
 }

@@ -44,8 +44,11 @@ Open **Appearance** in the CMS to give the site your own look. The preview updat
 - **Fonts:** Clean, Editorial (serif), Friendly or Technical.
 - **Layout:** sidebar or centred, photo shape, and comfortable or compact spacing.
 - **Browser tab icon:** your initials in your colours, or any one or two letters.
+- **Projects** as rows, big images or a two-column grid. **Sidebar links** as text, with icons, or a "Get in touch" button. A **bold accent** and **subtle motion** if you like.
 
 The share image for LinkedIn, WhatsApp and Discord follows your colours too.
+
+**Sections** lets you rename Work, Experience and Toolkit (say "Projects" and "Education"), drag them into any order, and add your own: a short text like "Now", or a list like Awards or Certifications. Add a **headline** on the Profile page for one big line above your work.
 
 ## Putting it online (Cloudflare Pages)
 

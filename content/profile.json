@@ -2,24 +2,61 @@
   "name": "Your Name",
   "role": "What you do, in a few words",
   "bio": "Sample bio. Replace this in the CMS with a few sentences about what you build, what you care about, and something about you away from the keyboard.",
+  "headline": "",
   "photo": {
     "src": null,
     "focusX": 50,
     "focusY": 50
   },
   "details": {
-    "location": { "value": "", "show": false },
-    "pronouns": { "value": "", "show": false },
-    "timezone": { "value": "", "show": false },
-    "languages": { "value": "", "show": false },
-    "learning": { "value": "", "show": false },
-    "phone": { "value": "", "show": false }
+    "location": {
+      "value": "",
+      "show": false
+    },
+    "pronouns": {
+      "value": "",
+      "show": false
+    },
+    "timezone": {
+      "value": "",
+      "show": false
+    },
+    "languages": {
+      "value": "",
+      "show": false
+    },
+    "learning": {
+      "value": "",
+      "show": false
+    },
+    "phone": {
+      "value": "",
+      "show": false
+    }
   },
-  "availability": { "show": false, "text": "" },
+  "availability": {
+    "show": false,
+    "text": ""
+  },
   "links": [
-    { "label": "GitHub", "url": "https://github.com/", "show": true },
-    { "label": "LinkedIn", "url": "https://www.linkedin.com/", "show": true }
+    {
+      "label": "GitHub",
+      "url": "https://github.com/",
+      "show": true
+    },
+    {
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/",
+      "show": true
+    }
   ],
-  "email": { "value": "", "show": true },
-  "resume": { "src": null, "show": true, "updated": "" }
+  "email": {
+    "value": "",
+    "show": true
+  },
+  "resume": {
+    "src": null,
+    "show": true,
+    "updated": ""
+  }
 }

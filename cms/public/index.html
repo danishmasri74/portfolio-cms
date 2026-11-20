@@ -42,6 +42,7 @@
     <a href="#projects" :class="{ on: navOn('projects') }">Projects <span class="dot" x-show="sectionDirty('projects')"></span></a>
     <a href="#experience" :class="{ on: navOn('experience') }">Experience <span class="dot" x-show="sectionDirty('experience')"></span></a>
     <a href="#toolkit" :class="{ on: navOn('toolkit') }">Toolkit <span class="dot" x-show="sectionDirty('toolkit')"></span></a>
+    <a href="#sections" :class="{ on: navOn('sections') }">Sections <span class="dot" x-show="sectionDirty('sections')"></span></a>
     <a href="#appearance" :class="{ on: navOn('appearance') }">Appearance <span class="dot" x-show="sectionDirty('theme')"></span></a>
     <div class="sep">
       <a href="#history" :class="{ on: navOn('history') }">History</a>
@@ -229,6 +230,7 @@
           <div class="f h" :class="{ err: err('name') }"><label for="pr-name">Name</label><input id="pr-name" type="text" x-model="form.name"><span class="errt" x-text="err('name')"></span></div>
           <div class="f h" :class="{ err: err('role') }"><label for="pr-role">Role</label><input id="pr-role" type="text" x-model="form.role"><span class="errt" x-text="err('role')"></span></div>
           <div class="f" :class="{ err: err('bio') }"><label for="pr-bio">Bio <i :class="{ over: count(form.bio, 400).over }" x-text="count(form.bio, 400).text"></i></label><textarea id="pr-bio" x-model="form.bio" rows="5"></textarea><span class="errt" x-text="err('bio')"></span></div>
+          <div class="f" :class="{ err: err('headline') }"><label for="pr-head">Headline <i :class="{ over: count(form.headline || '', 120).over }" x-text="count(form.headline || '', 120).text"></i></label><input id="pr-head" type="text" x-model="form.headline" placeholder="I build tools that make student life a little less painful."><span class="help">One line shown big above your work. Optional.</span><span class="errt" x-text="err('headline')"></span></div>
 
           <div class="grp">Details <span class="gh">Show</span></div>
           <div class="f">
@@ -276,6 +278,72 @@
             <input class="hidden-file" id="cv-file" type="file" accept="application/pdf" @change="uploadResume($event.target.files[0]); $event.target.value = ''">
           </div>
         </div>
+      </div>
+    </template>
+
+    <!-- ================= SECTIONS ================= -->
+    <template x-if="view === 'sections' && form">
+      <div>
+        <div class="ph"><h1>Sections</h1><div class="r"><span class="unsaved" x-show="dirty">Unsaved changes</span><button class="btn ghost" type="button" x-show="dirty" @click="cancelEdits()">Cancel</button><button class="btn pri" type="button" @click="save()" :disabled="saving">Save</button></div></div>
+        <p class="hint" style="margin:-6px 0 18px">Rename sections, drag ⠿ to change their order on your site, and add your own: a short text (like "Now") or a list (like Awards or Certifications).</p>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+        <div class="secs">
+          <template x-for="(id, i) in form.order" :key="id">
+            <div class="sec" :class="{ over: dropOn === `order:${i}`, off: !isBuiltIn(id) && sec(id) && !sec(id).show }" @dragover="dragOver('order', i, $event)" @drop.prevent="dropAt('order', i)">
+              <div class="sec-h">
+                <span class="hd" draggable="true" @dragstart="dragStart('order', i, $event)" @dragend="dragEnd()" title="Drag to reorder">⠿</span>
+                <template x-if="isBuiltIn(id)">
+                  <input type="text" x-model="form.labels[id]" :placeholder="builtInName(id)" :aria-label="`Name for the ${builtInName(id)} section`" :class="{ err: err(`labels.${id}`) }">
+                </template>
+                <template x-if="!isBuiltIn(id) && sec(id)">
+                  <input type="text" :id="`sec-t-${id}`" x-model="sec(id).title" placeholder="Section name" aria-label="Section name" :class="{ err: err(`custom.${secIndex(id)}.title`) }">
+                </template>
+                <span class="sec-k" x-text="isBuiltIn(id) ? builtInWhat(id) : (sec(id)?.kind === 'text' ? 'Text' : 'List')"></span>
+                <template x-if="!isBuiltIn(id) && sec(id)">
+                  <span class="sec-a">
+                    <button class="btn sm ghost" type="button" @click="openSec = openSec === id ? null : id" :aria-expanded="String(openSec === id)" x-text="openSec === id ? 'Done' : 'Edit'"></button>
+                    <button class="sw" type="button" role="switch" :aria-checked="String(sec(id).show)" @click="sec(id).show = !sec(id).show" :aria-label="`Show ${sec(id).title || 'section'}`"></button>
+                    <button class="x" type="button" @click="removeSection(id)" :aria-label="`Remove ${sec(id).title || 'section'}`">×</button>
+                  </span>
+                </template>
+              </div>
+              <span class="errt" x-show="!isBuiltIn(id) && sec(id) && err(`custom.${secIndex(id)}.title`)" x-text="sec(id) ? err(`custom.${secIndex(id)}.title`) : ''"></span>
+              <template x-if="!isBuiltIn(id) && sec(id) && openSec === id">
+                <div class="sec-b">
+                  <span class="seg" role="group" aria-label="Section type">
+                    <button type="button" :class="{ on: sec(id).kind === 'text' }" :aria-pressed="String(sec(id).kind === 'text')" @click="sec(id).kind = 'text'">Text</button>
+                    <button type="button" :class="{ on: sec(id).kind === 'list' }" :aria-pressed="String(sec(id).kind === 'list')" @click="sec(id).kind = 'list'; if (!sec(id).items.length) sec(id).items.push({ title: '', when: '', description: '', link: '' })">List</button>
+                  </span>
+                  <template x-if="sec(id).kind === 'text'">
+                    <div class="f" :class="{ err: err(`custom.${secIndex(id)}.text`) }"><label :for="`sec-x-${id}`">Text <i x-text="count(sec(id).text, 600).text"></i></label><textarea :id="`sec-x-${id}`" x-model="sec(id).text" rows="3" placeholder="Looking for a 2027 internship. Learning Rust on weekends."></textarea><span class="errt" x-text="err(`custom.${secIndex(id)}.text`)"></span></div>
+                  </template>
+                  <template x-if="sec(id).kind === 'list'">
+                    <div class="sec-items">
+                      <template x-for="(it, j) in sec(id).items" :key="j">
+                        <div class="sit" :class="{ over: dropOn === `secitems:${id}:${j}` }" @dragover="dragOver(`secitems:${id}`, j, $event)" @drop.prevent="dropAt(`secitems:${id}`, j)">
+                          <span class="hd" draggable="true" @dragstart="dragStart(`secitems:${id}`, j, $event)" @dragend="dragEnd()" title="Drag to reorder">⠿</span>
+                          <div class="sit-f">
+                            <input type="text" x-model="it.title" placeholder="Title, like Hackathon finalist" aria-label="Item title" :class="{ err: err(`custom.${secIndex(id)}.items.${j}.title`) }">
+                            <input type="text" x-model="it.when" placeholder="2025" aria-label="When" class="mono">
+                            <input type="text" x-model="it.description" placeholder="One line about it (optional)" aria-label="Item description">
+                            <input type="url" x-model="it.link" placeholder="https:// (optional)" aria-label="Item link" class="mono" :class="{ err: err(`custom.${secIndex(id)}.items.${j}.link`) }">
+                          </div>
+                          <button class="x" type="button" @click="sec(id).items.splice(j, 1)" :aria-label="`Remove ${it.title || 'item'}`">×</button>
+                        </div>
+                      </template>
+                      <button class="btn sm ghost" type="button" style="justify-self:start" @click="sec(id).items.push({ title: '', when: '', description: '', link: '' })" x-show="sec(id).items.length < 30">+ Add item</button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+        <div class="acts" style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn sm" type="button" @click="addSection('text')">+ Text section</button>
+          <button class="btn sm" type="button" @click="addSection('list')">+ List section</button>
+        </div>
+        <p class="hint">Built-in sections only show when they have something in them. What's in them is edited on their own pages.</p>
       </div>
     </template>
 
@@ -364,6 +432,45 @@
                 <button type="button" :class="{ on: form.density === v }" :aria-pressed="String(form.density === v)" @click="form.density = v" x-text="l"></button>
               </template>
             </span>
+          </div>
+
+          <div class="grp">Content</div>
+          <div class="f">
+            <span class="lb" id="ap-prj">Projects</span>
+            <div class="lays" role="group" aria-labelledby="ap-prj">
+              <button type="button" class="lay" :class="{ on: form.projects === 'rows' }" :aria-pressed="String(form.projects === 'rows')" @click="form.projects = 'rows'">
+                <span class="lay-d prj rows"><span><b><u></u><u></u></b><i></i></span><span><b><u></u><u></u></b><i></i></span></span>Rows
+              </button>
+              <button type="button" class="lay" :class="{ on: form.projects === 'feature' }" :aria-pressed="String(form.projects === 'feature')" @click="form.projects = 'feature'">
+                <span class="lay-d prj feature"><i></i><u></u><u></u></span>Big images
+              </button>
+              <button type="button" class="lay" :class="{ on: form.projects === 'grid' }" :aria-pressed="String(form.projects === 'grid')" @click="form.projects = 'grid'">
+                <span class="lay-d prj grid"><span><i></i><u></u></span><span><i></i><u></u></span></span>Grid
+              </button>
+            </div>
+            <span class="help">Big images and Grid suit visual work. Projects without a screenshot show as text.</span>
+          </div>
+          <div class="f">
+            <span class="lb" id="ap-lk">Sidebar links</span>
+            <span class="seg" role="group" aria-labelledby="ap-lk">
+              <template x-for="[v, l] in [['text', 'Text'], ['icons', 'With icons'], ['button', 'Get in touch button']]" :key="v">
+                <button type="button" :class="{ on: form.links === v }" :aria-pressed="String(form.links === v)" @click="form.links = v" x-text="l"></button>
+              </template>
+            </span>
+            <span class="help" x-show="form.links === 'button'">The button emails you, or opens your first link if your email is hidden. Other links become small icons.</span>
+          </div>
+          <div class="f">
+            <span class="lb" id="ap-as">Accent</span>
+            <span class="seg" role="group" aria-labelledby="ap-as">
+              <template x-for="[v, l] in [['subtle', 'Links only'], ['bold', 'Bold']]" :key="v">
+                <button type="button" :class="{ on: form.accentStrength === v }" :aria-pressed="String(form.accentStrength === v)" @click="form.accentStrength = v" x-text="l"></button>
+              </template>
+            </span>
+            <span class="help" x-show="form.accentStrength === 'bold'">Also colours your role, section labels and dates.</span>
+          </div>
+          <div class="f">
+            <div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.motion)" @click="form.motion = !form.motion" aria-labelledby="ap-mo"></button><span id="ap-mo">Subtle motion</span></div>
+            <span class="help">Sections fade in as the page opens, and links underline smoothly. Visitors who turned on "reduce motion" on their device see none of it.</span>
           </div>
 
           <div class="grp">Browser tab icon</div>

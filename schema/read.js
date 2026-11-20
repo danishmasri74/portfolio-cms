@@ -26,7 +26,7 @@ export const PUBLIC = join(ROOT, 'site', 'public');
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 
 // Content added in later versions. A copy made before then has no file yet, so it reads as the defaults.
-export const OPTIONAL = ['theme'];
+export const OPTIONAL = ['theme', 'sections'];
 
 export function readSingle(name) {
   const file = join(CONTENT, `${name}.json`);
@@ -61,6 +61,7 @@ export function readAll() {
     settings: readSingle('settings'),
     status: readSingle('status'),
     theme: readSingle('theme'),
+    sections: readSingle('sections'),
     projects: readCollection('projects'),
     experience: readCollection('experience'),
   };

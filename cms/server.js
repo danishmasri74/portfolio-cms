@@ -119,11 +119,11 @@ app.get('/api/changes', async (c) => ok(c, { ...(await gitops.changes()), undepl
 
 // ---------- singles ----------
 const shareImage = () => images.generateShareImage(store.getSingle('profile'), store.getSingle('settings'), store.getSingle('theme'));
-for (const name of ['profile', 'toolkit', 'settings', 'theme']) {
+for (const name of ['profile', 'toolkit', 'settings', 'theme', 'sections']) {
   app.get(`/api/${name}`, (c) => ok(c, { data: store.getSingle(name) }));
   app.put(`/api/${name}`, async (c) => {
     const data = store.saveSingle(name, await c.req.json());
-    if (name !== 'toolkit' && store.getSingle('settings').shareImage === 'generated') await shareImage().catch(() => {});
+    if (['profile', 'settings', 'theme'].includes(name) && store.getSingle('settings').shareImage === 'generated') await shareImage().catch(() => {});
     // The favicon follows the theme, and the name too unless the owner put in their own icon file.
     if (name === 'theme' || (name === 'profile' && images.faviconIsGenerated())) {
       try {
@@ -139,7 +139,7 @@ app.post('/api/theme/preview', async (c) => {
   const colors = themeColors(t);
   return ok(c, {
     css: themeCss(t),
-    attrs: { layout: t.layout, photo: t.photo, density: t.density },
+    attrs: { layout: t.layout, photo: t.photo, density: t.density, projects: t.projects, links: t.links, accent: t.accentStrength, motion: String(t.motion) },
     contrast: contrast(t.accent, colors.light.bg),
     darkAccent: colors.dark.accent,
   });

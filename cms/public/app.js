@@ -66,6 +66,7 @@ document.addEventListener('alpine:init', () => {
     commitMessage: '',
     picker: { open: false, g: -1, i: -1, q: '', kind: 'all', results: [], sel: null, loading: false },
     svg: {},
+    hex: {}, // logo colours, for showing icons the way the site will
     modal: null,
     toast: '',
     drag: null,
@@ -179,7 +180,7 @@ document.addEventListener('alpine:init', () => {
       const [a = 'projects', b, c] = parts;
       if (a === 'projects' && b) return { view: 'project', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
       if (a === 'experience' && b) return { view: 'exp', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
-      const views = ['projects', 'experience', 'profile', 'toolkit', 'settings', 'history', 'review', 'setup', 'hosting'];
+      const views = ['projects', 'experience', 'profile', 'toolkit', 'appearance', 'settings', 'history', 'review', 'setup', 'hosting'];
       return { view: views.includes(a) ? a : 'projects', slug: null, isNew: false, tab: 'details' };
     },
     hashFor(t) {
@@ -222,6 +223,11 @@ document.addEventListener('alpine:init', () => {
 
     async loadView() {
       this.form = null;
+      // Leaving Appearance: reload the preview so unsaved choices don't linger on it.
+      if (this.view !== 'appearance' && this.themeSent) {
+        this.themeSent = null;
+        this.nonce++;
+      }
       clearInterval(this.hostingTimer);
       this.hostingTimer = null;
       this.writeup = this.writeupSnap = '';
@@ -244,6 +250,12 @@ document.addEventListener('alpine:init', () => {
           const { data } = await api('GET', '/api/toolkit');
           this.form = data;
           this.ensureSvgs(data.groups.flatMap((g) => g.items.map((i) => i.icon)));
+        } else if (this.view === 'appearance') {
+          const [t, opts] = await Promise.all([api('GET', '/api/theme'), this.themeOpts ? null : api('GET', '/api/theme/options')]);
+          if (opts) this.themeOpts = opts;
+          this.form = t.data;
+          this.themeCheck = null;
+          this.themeLive();
         } else if (this.view === 'settings') {
           const [s, st] = await Promise.all([api('GET', '/api/settings'), api('GET', '/api/state')]);
           this.data.status = st.status;
@@ -285,11 +297,11 @@ document.addEventListener('alpine:init', () => {
       return !!this.form && (JSON.stringify(this.form) !== this.snap || this.writeup !== this.writeupSnap);
     },
     get canSave() {
-      return ['project', 'exp', 'profile', 'toolkit', 'settings'].includes(this.view) && !!this.form;
+      return ['project', 'exp', 'profile', 'toolkit', 'appearance', 'settings'].includes(this.view) && !!this.form;
     },
     get formName() {
       if (this.view === 'project' || this.view === 'exp') return this.form?.title || (this.isNew ? 'the new entry' : 'this entry');
-      return { profile: 'Profile', toolkit: 'Toolkit', settings: 'Settings' }[this.view] || '';
+      return { profile: 'Profile', toolkit: 'Toolkit', appearance: 'Appearance', settings: 'Settings' }[this.view] || '';
     },
     resetDirty() {
       this.snap = this.form ? JSON.stringify(this.form) : '';
@@ -338,6 +350,8 @@ document.addEventListener('alpine:init', () => {
           clean.groups.forEach((g) => g.items.forEach((it) => delete it.auto));
           this.form = (await api('PUT', '/api/toolkit', clean)).data;
           this.ensureSvgs(this.form.groups.flatMap((g) => g.items.map((i) => i.icon)));
+        } else if (this.view === 'appearance') {
+          this.form = (await api('PUT', '/api/theme', this.form)).data;
         } else if (this.view === 'settings') {
           const settings = (await api('PUT', '/api/settings', this.form.settings)).data;
           let status = this.form.status;
@@ -546,8 +560,11 @@ document.addEventListener('alpine:init', () => {
       const missing = icons.filter((i) => i && !(this.iconKey(i) in this.svg));
       if (!missing.length) return;
       try {
-        const { svgs } = await api('POST', '/api/icons/svg', { icons: missing });
-        missing.forEach((i, n) => (this.svg[this.iconKey(i)] = svgs[n]));
+        const { svgs, hexes = [] } = await api('POST', '/api/icons/svg', { icons: missing });
+        missing.forEach((i, n) => {
+          this.svg[this.iconKey(i)] = svgs[n];
+          this.hex[this.iconKey(i)] = hexes[n] || null;
+        });
       } catch {}
     },
     addGroup() {
@@ -605,6 +622,41 @@ document.addEventListener('alpine:init', () => {
       item.icon = icon ? { set: icon.set, name: icon.name } : null;
       item.auto = false;
       this.picker.open = false;
+    },
+
+    // ---------- appearance ----------
+    themeOpts: null,
+    themeCheck: null,
+    themeTimer: null,
+    themeSent: null,
+    /** Show unsaved Appearance choices in the preview straight away (the preview page listens for this). */
+    themeLive() {
+      clearTimeout(this.themeTimer);
+      if (this.view !== 'appearance' || !this.form) return;
+      const form = clone(this.form);
+      this.themeTimer = setTimeout(async () => {
+        try {
+          const r = await api('POST', '/api/theme/preview', form);
+          this.themeCheck = r;
+          this.themeSent = { type: 'portfolio-theme', css: r.css, attrs: r.attrs };
+          this.sendTheme();
+        } catch {}
+      }, 120);
+    },
+    // A plain copy: the browser can't send Alpine's reactive objects to another page.
+    sendTheme() {
+      if (this.themeSent) this.$refs.frame?.contentWindow?.postMessage(JSON.parse(JSON.stringify(this.themeSent)), '*');
+    },
+    /** The preview reloaded: put the unsaved look back on it. */
+    framed() {
+      if (this.view === 'appearance') this.sendTheme();
+    },
+    get accentNote() {
+      const c = this.themeCheck;
+      if (!c || this.form?.mode === 'dark') return { ok: true, text: 'Easy to read' };
+      if (c.contrast >= 4.5) return { ok: true, text: 'Easy to read' };
+      if (c.contrast >= 3) return { ok: false, text: 'A bit light for links and small text. A darker shade reads better.' };
+      return { ok: false, text: 'Hard to read on this background. Pick a darker colour.' };
     },
 
     // ---------- preview ----------

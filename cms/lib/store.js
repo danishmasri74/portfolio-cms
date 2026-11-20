@@ -2,10 +2,10 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { schemas, fieldErrors, slugify } from '../../schema/content.js';
-import { CONTENT, readCollection } from '../../schema/read.js';
+import { CONTENT, readCollection, readSingle } from '../../schema/read.js';
 import { matchIcon } from '../../schema/icons.js';
 
-export const SINGLES = ['profile', 'toolkit', 'settings', 'status'];
+export const SINGLES = ['profile', 'toolkit', 'settings', 'status', 'theme'];
 export const COLLECTIONS = ['projects', 'experience'];
 
 const jsonPath = (name) => join(CONTENT, `${name}.json`);
@@ -30,7 +30,7 @@ function validate(name, data) {
 }
 
 export function getSingle(name) {
-  return schemas[name].parse(JSON.parse(readFileSync(jsonPath(name), 'utf8')));
+  return readSingle(name);
 }
 
 export function saveSingle(name, data) {

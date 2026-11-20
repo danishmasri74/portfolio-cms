@@ -115,11 +115,25 @@ export const statusSchema = z.object({
   showLinks: z.boolean().default(true),
 });
 
+// The site's look. Every default matches the original design.
+export const themeSchema = z.object({
+  palette: z.enum(['paper', 'warm', 'cool', 'stone']).default('paper'),
+  mode: z.enum(['light', 'dark', 'auto']).default('light'),
+  accent: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a colour.').default('#2446c7'),
+  fonts: z.enum(['clean', 'editorial', 'friendly', 'technical']).default('clean'),
+  layout: z.enum(['sidebar', 'centred']).default('sidebar'),
+  photo: z.enum(['rounded', 'circle', 'square', 'none']).default('rounded'),
+  density: z.enum(['comfortable', 'compact']).default('comfortable'),
+  // Letters on the browser-tab icon. Empty = first letters of the first and last name.
+  monogram: z.string().trim().max(2, 'Use one or two letters.').default(''),
+});
+
 export const schemas = {
   profile: profileSchema,
   toolkit: toolkitSchema,
   settings: settingsSchema,
   status: statusSchema,
+  theme: themeSchema,
   projects: projectSchema,
   experience: experienceSchema,
 };

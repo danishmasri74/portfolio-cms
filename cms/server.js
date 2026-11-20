@@ -6,8 +6,9 @@ import { exec, execFile } from 'node:child_process';
 import { relative, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { ROOT, readAll } from '../schema/read.js';
-import { searchIcons, matchIcon, iconSvg } from '../schema/icons.js';
-import { siteBase } from '../schema/content.js';
+import { searchIcons, matchIcon, iconSvg, iconHex } from '../schema/icons.js';
+import { siteBase, schemas } from '../schema/content.js';
+import { PALETTES, FONTS, ACCENTS, DEFAULT_THEME, themeCss, themeColors, contrast } from '../schema/theme.js';
 import * as store from './lib/store.js';
 import * as images from './lib/images.js';
 import * as gitops from './lib/gitops.js';
@@ -117,16 +118,33 @@ app.get('/api/state', async (c) => {
 app.get('/api/changes', async (c) => ok(c, { ...(await gitops.changes()), undeployed: await hosting.undeployed(), hosted: hosting.isConfigured(), busy, sync }));
 
 // ---------- singles ----------
-for (const name of ['profile', 'toolkit', 'settings']) {
+const shareImage = () => images.generateShareImage(store.getSingle('profile'), store.getSingle('settings'), store.getSingle('theme'));
+for (const name of ['profile', 'toolkit', 'settings', 'theme']) {
   app.get(`/api/${name}`, (c) => ok(c, { data: store.getSingle(name) }));
   app.put(`/api/${name}`, async (c) => {
     const data = store.saveSingle(name, await c.req.json());
-    if ((name === 'profile' || name === 'settings') && store.getSingle('settings').shareImage === 'generated') {
-      await images.generateShareImage(store.getSingle('profile'), store.getSingle('settings')).catch(() => {});
+    if (name !== 'toolkit' && store.getSingle('settings').shareImage === 'generated') await shareImage().catch(() => {});
+    // The favicon follows the theme, and the name too unless the owner put in their own icon file.
+    if (name === 'theme' || (name === 'profile' && images.faviconIsGenerated())) {
+      try {
+        images.generateFavicon(store.getSingle('profile'), store.getSingle('theme'));
+      } catch {}
     }
     return ok(c, { data });
   });
 }
+app.post('/api/theme/preview', async (c) => {
+  const parsed = schemas.theme.safeParse(await c.req.json().catch(() => ({})));
+  const t = parsed.success ? parsed.data : schemas.theme.parse({});
+  const colors = themeColors(t);
+  return ok(c, {
+    css: themeCss(t),
+    attrs: { layout: t.layout, photo: t.photo, density: t.density },
+    contrast: contrast(t.accent, colors.light.bg),
+    darkAccent: colors.dark.accent,
+  });
+});
+app.get('/api/theme/options', (c) => ok(c, { palettes: PALETTES, fonts: FONTS, accents: ACCENTS, defaults: DEFAULT_THEME, monogram: images.monogram(store.getSingle('profile'), {}) }));
 // Maintenance page content is saved normally; the on/off switch publishes on its own (see /api/maintenance).
 app.put('/api/status', async (c) => {
   const body = await c.req.json();
@@ -179,7 +197,7 @@ app.post('/api/icons/match', async (c) => {
 });
 app.post('/api/icons/svg', async (c) => {
   const { icons = [] } = await c.req.json();
-  return ok(c, { svgs: icons.map((i) => iconSvg(i)) });
+  return ok(c, { svgs: icons.map((i) => iconSvg(i)), hexes: icons.map((i) => iconHex(i)) });
 });
 
 // ---------- check / publish ----------
@@ -419,7 +437,7 @@ const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
   images.ensureAllVariants().catch(() => {});
   // Make sure there's a share image for link previews.
   if (!existsSync(join(ROOT, 'site', 'public', 'og.png')) && store.getSingle('settings').shareImage === 'generated') {
-    images.generateShareImage(store.getSingle('profile'), store.getSingle('settings')).catch(() => {});
+    shareImage().catch(() => {});
   }
   sync = { state: 'pulling', at: null, message: '' };
   gitops.pullLatest().then((r) => {

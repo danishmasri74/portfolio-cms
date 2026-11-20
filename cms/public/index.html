@@ -10,6 +10,11 @@
   <link rel="stylesheet" href="/fontsource/instrument-sans/500.css">
   <link rel="stylesheet" href="/fontsource/instrument-sans/600.css">
   <link rel="stylesheet" href="/fontsource/jetbrains-mono/400.css">
+  <!-- Font pairings shown on the Appearance page. Only downloaded when that page uses them. -->
+  <link rel="stylesheet" href="/fontsource/newsreader/600.css">
+  <link rel="stylesheet" href="/fontsource/nunito/600.css">
+  <link rel="stylesheet" href="/fontsource/space-grotesk/600.css">
+  <link rel="stylesheet" href="/fontsource/ibm-plex-mono/400.css">
   <link rel="stylesheet" href="/app.css">
   <script src="/app.js"></script>
   <script defer src="/vendor/alpine.js"></script>
@@ -37,6 +42,7 @@
     <a href="#projects" :class="{ on: navOn('projects') }">Projects <span class="dot" x-show="sectionDirty('projects')"></span></a>
     <a href="#experience" :class="{ on: navOn('experience') }">Experience <span class="dot" x-show="sectionDirty('experience')"></span></a>
     <a href="#toolkit" :class="{ on: navOn('toolkit') }">Toolkit <span class="dot" x-show="sectionDirty('toolkit')"></span></a>
+    <a href="#appearance" :class="{ on: navOn('appearance') }">Appearance <span class="dot" x-show="sectionDirty('theme')"></span></a>
     <div class="sep">
       <a href="#history" :class="{ on: navOn('history') }">History</a>
       <a href="#hosting" :class="{ on: navOn('hosting') }">Hosting</a>
@@ -273,6 +279,109 @@
       </div>
     </template>
 
+    <!-- ================= APPEARANCE ================= -->
+    <template x-if="view === 'appearance' && form && themeOpts">
+      <div x-effect="themeLive(JSON.stringify(form))">
+        <div class="ph"><h1>Appearance</h1><div class="r"><span class="unsaved" x-show="dirty">Unsaved changes</span><button class="btn ghost" type="button" x-show="dirty" @click="cancelEdits()">Cancel</button><button class="btn pri" type="button" @click="save()" :disabled="saving">Save</button></div></div>
+        <p class="hint" style="margin:-6px 0 18px">Make the site look like you. The preview shows changes as you pick them. Save to keep them.</p>
+        <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
+        <div class="fg">
+          <div class="grp first">Colours</div>
+          <div class="f">
+            <span class="lb" id="ap-pal">Palette</span>
+            <div class="pals" role="group" aria-labelledby="ap-pal">
+              <template x-for="[key, p] in Object.entries(themeOpts.palettes)" :key="key">
+                <button type="button" class="pal" :class="{ on: form.palette === key }" :aria-pressed="String(form.palette === key)" @click="form.palette = key">
+                  <span class="pal-sw">
+                    <span :style="`background:${p.light.bg};color:${p.light.text}`">Aa<i :style="`background:${form.accent}`"></i></span>
+                    <span :style="`background:${p.dark.bg};color:${p.dark.text}`">Aa<i :style="`background:${themeCheck?.darkAccent || form.accent}`"></i></span>
+                  </span>
+                  <span x-text="p.label"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+          <div class="f">
+            <span class="lb" id="ap-mode">Light or dark</span>
+            <span class="seg" role="group" aria-labelledby="ap-mode">
+              <template x-for="[v, l] in [['light', 'Light'], ['dark', 'Dark'], ['auto', 'Auto']]" :key="v">
+                <button type="button" :class="{ on: form.mode === v }" :aria-pressed="String(form.mode === v)" @click="form.mode = v" x-text="l"></button>
+              </template>
+            </span>
+            <span class="help">Auto follows each visitor's device setting.</span>
+          </div>
+          <div class="f" :class="{ err: err('accent') }">
+            <span class="lb" id="ap-acc">Accent colour <i>links and highlights</i></span>
+            <div class="accs" role="group" aria-labelledby="ap-acc">
+              <template x-for="a in themeOpts.accents" :key="a">
+                <button type="button" class="acc" :class="{ on: form.accent.toLowerCase() === a }" :style="`background:${a}`" @click="form.accent = a" :aria-label="`Accent ${a}`" :aria-pressed="String(form.accent.toLowerCase() === a)"></button>
+              </template>
+              <label class="acc own" :class="{ on: !themeOpts.accents.includes(form.accent.toLowerCase()) }" title="Pick any colour"><input type="color" x-model="form.accent" aria-label="Pick any colour"><span>+</span></label>
+              <span class="mono" style="font-size:12px;color:var(--muted)" x-text="form.accent"></span>
+            </div>
+            <span class="help" :style="accentNote.ok ? '' : 'color:var(--warn-text)'" x-text="accentNote.text"></span>
+            <span class="errt" x-text="err('accent')"></span>
+          </div>
+
+          <div class="grp">Fonts</div>
+          <div class="f">
+            <div class="fonts" role="group" aria-label="Font pairing">
+              <template x-for="[key, f] in Object.entries(themeOpts.fonts)" :key="key">
+                <button type="button" class="font" :class="{ on: form.fonts === key }" :aria-pressed="String(form.fonts === key)" @click="form.fonts = key">
+                  <b :style="`font-family:${f.display}`" x-text="data.profile?.name || 'Your Name'"></b>
+                  <span :style="`font-family:${f.mono}`">2026 · github ↗</span>
+                  <i x-text="`${f.label} · ${f.note}`"></i>
+                </button>
+              </template>
+            </div>
+          </div>
+
+          <div class="grp">Layout</div>
+          <div class="f">
+            <span class="lb" id="ap-lay">Page layout</span>
+            <div class="lays" role="group" aria-labelledby="ap-lay">
+              <button type="button" class="lay" :class="{ on: form.layout === 'sidebar' }" :aria-pressed="String(form.layout === 'sidebar')" @click="form.layout = 'sidebar'">
+                <span class="lay-d side"><i></i><span><u></u><u></u><u></u></span></span>Sidebar
+              </button>
+              <button type="button" class="lay" :class="{ on: form.layout === 'centred' }" :aria-pressed="String(form.layout === 'centred')" @click="form.layout = 'centred'">
+                <span class="lay-d mid"><i></i><span><u></u><u></u><u></u></span></span>Centred
+              </button>
+            </div>
+            <span class="help">Phones always show one column.</span>
+          </div>
+          <div class="f">
+            <span class="lb" id="ap-ph">Photo shape</span>
+            <span class="seg" role="group" aria-labelledby="ap-ph">
+              <template x-for="[v, l] in [['rounded', 'Rounded'], ['circle', 'Circle'], ['square', 'Square'], ['none', 'Hidden']]" :key="v">
+                <button type="button" :class="{ on: form.photo === v }" :aria-pressed="String(form.photo === v)" @click="form.photo = v" x-text="l"></button>
+              </template>
+            </span>
+          </div>
+          <div class="f">
+            <span class="lb" id="ap-sp">Spacing</span>
+            <span class="seg" role="group" aria-labelledby="ap-sp">
+              <template x-for="[v, l] in [['comfortable', 'Comfortable'], ['compact', 'Compact']]" :key="v">
+                <button type="button" :class="{ on: form.density === v }" :aria-pressed="String(form.density === v)" @click="form.density = v" x-text="l"></button>
+              </template>
+            </span>
+          </div>
+
+          <div class="grp">Browser tab icon</div>
+          <div class="f" :class="{ err: err('monogram') }">
+            <div class="media" style="align-items:center">
+              <img :src="`/site/favicon.svg?t=${nonce}`" alt="Current tab icon" width="40" height="40" style="border-radius:6px">
+              <div class="meta" style="gap:6px">
+                <label for="ap-mono" class="lb">Letters <i>optional</i></label>
+                <input id="ap-mono" type="text" maxlength="2" style="width:80px" class="mono" x-model="form.monogram" :placeholder="themeOpts.monogram">
+              </div>
+            </div>
+            <span class="help" x-text="`Leave empty to use your initials (${themeOpts.monogram}). Uses your colours and photo shape, updated on save.`"></span>
+            <span class="errt" x-text="err('monogram')"></span>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- ================= TOOLKIT ================= -->
     <template x-if="view === 'toolkit' && form">
       <div>
@@ -280,8 +389,9 @@
         <div class="bn" x-show="errorCount" x-text="`${errorCount} field${errorCount === 1 ? ' needs' : 's need'} fixing before this can be saved.`"></div>
         <div class="icobar">
           <div class="tg"><button class="sw" type="button" role="switch" :aria-checked="String(form.icons)" @click="form.icons = !form.icons" aria-labelledby="tk-ic-l"></button><span id="tk-ic-l">Show icons</span></div>
-          <span class="seg" x-show="form.icons"><button type="button" :class="{ on: form.iconStyle === 'mono' }" @click="form.iconStyle = 'mono'">Monochrome</button><button type="button" :class="{ on: form.iconStyle === 'brand' }" @click="form.iconStyle = 'brand'">Brand colours</button></span>
-          <span class="help">Desktop only. Phones show text.</span>
+          <span class="icc" x-show="form.icons"><span id="tk-ic-c">Icon colour</span>
+          <span class="seg" role="group" aria-labelledby="tk-ic-c"><button type="button" :class="{ on: form.iconStyle === 'mono' }" :aria-pressed="String(form.iconStyle === 'mono')" @click="form.iconStyle = 'mono'">One colour</button><button type="button" :class="{ on: form.iconStyle === 'brand' }" :aria-pressed="String(form.iconStyle === 'brand')" @click="form.iconStyle = 'brand'">Logo colours</button></span></span>
+          <span class="help">Icons show on desktop only. Phones show text.</span>
         </div>
         <template x-for="(g, gi) in form.groups" :key="gi">
           <div class="tgrp" :data-g="gi" :class="{ over: dropOn === `groups:${gi}` }" @dragover="dragOver('groups', gi, $event)" @drop.prevent="dropAt('groups', gi)">
@@ -294,7 +404,7 @@
               <template x-for="(it, ii) in g.items" :key="ii">
                 <div class="it" :class="{ over: dropOn === `items:${gi}:${ii}` }" @dragover="drag && drag.list === `items:${gi}` && ($event.preventDefault(), dropOn = `items:${gi}:${ii}`)" @drop.prevent="dropAt(`items:${gi}`, ii)" draggable="true" @dragstart="dragStart(`items:${gi}`, ii, $event)" @dragend="dragEnd()" @click.outside="picker.open && picker.g === gi && picker.i === ii && (picker.open = false)">
                   <button class="ib" type="button" :class="{ act: picker.open && picker.g === gi && picker.i === ii }" @click="openPicker(gi, ii)" :aria-label="`Choose icon for ${it.name || 'item'}`">
-                    <template x-if="it.icon && svg[iconKey(it.icon)]"><span x-html="svg[iconKey(it.icon)]" :style="form.iconStyle === 'brand' ? '' : ''"></span></template>
+                    <template x-if="it.icon && svg[iconKey(it.icon)]"><span x-html="svg[iconKey(it.icon)]" :style="form.iconStyle === 'brand' && hex[iconKey(it.icon)] ? `color:${hex[iconKey(it.icon)]}` : ''"></span></template>
                     <template x-if="!it.icon || !svg[iconKey(it.icon)]"><span class="none">+</span></template>
                   </button>
                   <input type="text" x-model="it.name" @blur="autoIcon(it)" placeholder="Item name" aria-label="Item name" :class="{ err: err(`groups.${gi}.items.${ii}.name`) }">
@@ -662,7 +772,7 @@ cms/          this app</pre>
         </div>
       </template>
       <template x-if="view !== 'settings' && preview.status === 'running'">
-        <iframe :src="previewSrc" :style="frameStyle" title="Site preview"></iframe>
+        <iframe :src="previewSrc" :style="frameStyle" title="Site preview" x-ref="frame" @load="framed()"></iframe>
       </template>
       <template x-if="view !== 'settings' && preview.status === 'starting'">
         <div class="pvdead"><b>Starting the preview…</b>This takes a few seconds.</div>

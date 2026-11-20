@@ -1,10 +1,11 @@
 // Uploads: resize to WebP, store under site/public, generate the share image, clean up unused files.
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
-import { writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, statSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, readdirSync, rmSync, existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { PUBLIC } from '../../schema/read.js';
 import { slugify } from '../../schema/content.js';
+import { themeColors, resolveTheme } from '../../schema/theme.js';
 import { allContentText } from './store.js';
 
 const hash = (buf) => createHash('sha1').update(buf).digest('hex').slice(0, 8);
@@ -88,22 +89,66 @@ export async function ensureAllVariants() {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-/** Share image generated from name, role and domain. */
-export async function generateShareImage(profile, settings) {
+// The colours a theme shows first: dark for "dark", light for "light" and "auto".
+const firstLook = (theme) => {
+  const t = resolveTheme(theme);
+  return themeColors(t)[t.mode === 'dark' ? 'dark' : 'light'];
+};
+const serif = (theme) => resolveTheme(theme).fonts === 'editorial';
+
+/** Share image generated from name, role and domain, in the theme's colours. */
+export async function generateShareImage(profile, settings, theme) {
+  const c = firstLook(theme);
+  const face = serif(theme) ? 'Georgia, Times New Roman, serif' : 'Segoe UI, Helvetica, Arial, sans-serif';
   const domain = (settings.siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
   // Shrink the text for long names and roles so nothing runs off the 1200px canvas (about 0.56em per character).
   const fit = (text, max, width = 1008) => Math.max(36, Math.min(max, Math.floor(width / (String(text).length * 0.56))));
   const nameSize = fit(profile.name, 84);
   const roleSize = fit(profile.role, 38);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#FBFBFA"/>
-  <rect x="0" y="0" width="1200" height="630" fill="none" stroke="#E2E3E1" stroke-width="2"/>
-  <text x="96" y="300" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="${nameSize}" font-weight="600" fill="#17181A">${esc(profile.name)}</text>
-  <text x="96" y="372" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="${roleSize}" fill="#6B6E73">${esc(profile.role)}</text>
-  <text x="96" y="534" font-family="Consolas, Menlo, monospace" font-size="28" fill="#2446C7">${esc(domain)}</text>
+  <rect width="1200" height="630" fill="${c.bg}"/>
+  <rect x="0" y="0" width="1200" height="630" fill="none" stroke="${c.rule}" stroke-width="2"/>
+  <text x="96" y="300" font-family="${face}" font-size="${nameSize}" font-weight="600" fill="${c.text}">${esc(profile.name)}</text>
+  <text x="96" y="372" font-family="${face}" font-size="${roleSize}" fill="${c.muted}">${esc(profile.role)}</text>
+  <text x="96" y="534" font-family="Consolas, Menlo, monospace" font-size="28" fill="${c.accent}">${esc(domain)}</text>
 </svg>`;
   const out = await sharp(Buffer.from(svg)).png().toBuffer();
   writeFileSync(join(PUBLIC, 'og.png'), out);
+}
+
+// ---------- favicon ----------
+const FAVICON = join(PUBLIC, 'favicon.svg');
+const GENERATED = 'data-generated="cms"';
+
+/** Letters for the favicon: the theme's own, or the first letters of the first and last name. */
+export function monogram(profile, theme) {
+  const own = String(resolveTheme(theme).monogram || '').trim();
+  if (own) return own.slice(0, 2);
+  const words = String(profile.name || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '•';
+  return (words[0][0] + (words.length > 1 ? words.at(-1)[0] : '')).toUpperCase();
+}
+
+/** True when the CMS made the current favicon, so it's safe to replace when the name changes. */
+export function faviconIsGenerated() {
+  try {
+    return readFileSync(FAVICON, 'utf8').includes(GENERATED);
+  } catch {
+    return true;
+  }
+}
+
+/** Favicon: the monogram in the theme's colours, shaped like the profile photo. */
+export function generateFavicon(profile, theme) {
+  const t = resolveTheme(theme);
+  const c = firstLook(t);
+  const letters = monogram(profile, t);
+  const shape = t.photo === 'circle' ? '<circle cx="32" cy="32" r="32"' : `<rect width="64" height="64" rx="${t.photo === 'square' ? 0 : 12}"`;
+  const size = letters.length > 1 ? 26 : 34;
+  const face = serif(t) ? 'Georgia, Times New Roman, serif' : 'Arial, Helvetica, sans-serif';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" ${GENERATED}>${shape} fill="${c.text}"/><text x="32" y="${letters.length > 1 ? 41 : 44}" text-anchor="middle" font-family="${face}" font-size="${size}" font-weight="700" fill="${c.bg}">${esc(letters)}</text></svg>
+`;
+  writeFileSync(FAVICON, svg);
 }
 
 /** Delete uploaded files that no content refers to any more. Returns removed public paths. */

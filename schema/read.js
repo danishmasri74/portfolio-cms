@@ -25,8 +25,13 @@ export const PUBLIC = join(ROOT, 'site', 'public');
 
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 
+// Content added in later versions. A copy made before then has no file yet, so it reads as the defaults.
+export const OPTIONAL = ['theme'];
+
 export function readSingle(name) {
-  return schemas[name].parse(readJson(join(CONTENT, `${name}.json`)));
+  const file = join(CONTENT, `${name}.json`);
+  if (OPTIONAL.includes(name) && !existsSync(file)) return schemas[name].parse({});
+  return schemas[name].parse(readJson(file));
 }
 
 /** Entries of a collection ("projects" | "experience"), sorted by order. Each has slug + writeupText. */
@@ -55,6 +60,7 @@ export function readAll() {
     toolkit: readSingle('toolkit'),
     settings: readSingle('settings'),
     status: readSingle('status'),
+    theme: readSingle('theme'),
     projects: readCollection('projects'),
     experience: readCollection('experience'),
   };

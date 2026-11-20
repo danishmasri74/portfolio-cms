@@ -35,6 +35,18 @@ The CMS opens at `http://127.0.0.1:4000` with a live preview of the site. The fi
 
 Replace the sample profile, project and experience with your own, then go online.
 
+## Make it yours
+
+Open **Appearance** in the CMS to give the site your own look. The preview updates as you pick:
+
+- **Palette** (Paper, Warm, Cool, Stone) and **Light, Dark or Auto**. Auto follows each visitor's device setting.
+- **Accent colour** for links and highlights: a preset or any colour you like. The CMS warns you if it's hard to read.
+- **Fonts:** Clean, Editorial (serif), Friendly or Technical.
+- **Layout:** sidebar or centred, photo shape, and comfortable or compact spacing.
+- **Browser tab icon:** your initials in your colours, or any one or two letters.
+
+The share image for LinkedIn, WhatsApp and Discord follows your colours too.
+
 ## Putting it online (Cloudflare Pages)
 
 Everything happens in the CMS, under **Hosting** in the sidebar:

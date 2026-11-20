@@ -5,10 +5,11 @@ import Maintenance from '../components/Maintenance.astro';
 import { readAll } from '../../../schema/read.js';
 import { formatRange, siteBase } from '../../../schema/content.js';
 import { iconSvg, iconHex } from '../../../schema/icons.js';
+import { logoVisibility } from '../../../schema/theme.js';
 import { responsive } from '../../../schema/images.js';
 
 const content = readAll();
-const { profile, projects, experience, toolkit, settings, status } = content;
+const { profile, projects, experience, toolkit, settings, status, theme } = content;
 const shownProjects = await Promise.all(projects.filter((p) => p.show).map(async (p) => ({ ...p, img: await responsive(p.image) })));
 const shownExperience = experience.filter((e) => e.show);
 const links = profile.links.filter((l) => l.show);
@@ -104,9 +105,11 @@ const jsonld = {
                   {g.items.map((it, i) => {
                     const svg = toolkit.icons ? iconSvg(it.icon) : '';
                     const hex = toolkit.iconStyle === 'brand' ? iconHex(it.icon) : null;
+                    const seen = hex ? logoVisibility(hex, theme) : null;
+                    const cls = ['ic', hex && 'logo', seen?.lowLight && 'low-light', seen?.lowDark && 'low-dark'].filter(Boolean).join(' ');
                     return (
                       <span class="item">
-                        {svg && <span class="ic" style={hex ? `color:${hex}` : undefined} set:html={svg} />}
+                        {svg && <span class={cls} style={hex ? `--logo:${hex}` : undefined} set:html={svg} />}
                         {it.name}{i < g.items.length - 1 && <span class="sep">, </span>}
                       </span>
                     );

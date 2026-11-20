@@ -16,7 +16,7 @@ async function api(method, url, body) {
     throw Object.assign(new Error("The CMS isn't responding. Start it again from the desktop shortcut."), { offline: true });
   }
   const json = await res.json().catch(() => ({ ok: false, message: 'Unexpected response.' }));
-  if (!json.ok) throw Object.assign(new Error(json.message || 'Something went wrong.'), { fields: json.fields || null, status: res.status });
+  if (!json.ok) throw Object.assign(new Error(json.message || 'Something went wrong.'), { fields: json.fields || null, reason: json.reason || null, status: res.status });
   return json;
 }
 
@@ -158,6 +158,7 @@ document.addEventListener('alpine:init', () => {
       Object.assign(this.data, {
         profile: s.profile, toolkit: s.toolkit, settings: s.settings, status: s.status,
         projects: s.projects, experience: s.experience, remote: s.remote, branch: s.branch, root: s.root, previewPort: s.previewPort,
+        startHidden: s.startHidden,
       });
       this.setupDone = s.setupDone;
       this.preview = s.preview;
@@ -193,7 +194,7 @@ document.addEventListener('alpine:init', () => {
       const [a = 'projects', b, c] = parts;
       if (a === 'projects' && b) return { view: 'project', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
       if (a === 'experience' && b) return { view: 'exp', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
-      const views = ['projects', 'experience', 'profile', 'toolkit', 'sections', 'appearance', 'settings', 'history', 'setup', 'hosting'];
+      const views = ['start', 'projects', 'experience', 'profile', 'toolkit', 'sections', 'appearance', 'settings', 'history', 'setup', 'hosting', 'domain', 'github'];
       return { view: views.includes(a) ? a : 'projects', slug: null, isNew: false, tab: 'details' };
     },
     hashFor(t) {
@@ -288,8 +289,16 @@ document.addEventListener('alpine:init', () => {
         } else if (this.view === 'history') {
           this.history = (await api('GET', '/api/history')).items;
         } else if (this.view === 'setup') {
-          await this.loadSetup();
-        } else if (this.view === 'hosting') {
+          await this.loadWelcome();
+        } else if (this.view === 'start') {
+          await this.loadState();
+          this.loadHosting(true);
+        } else if (this.view === 'github') {
+          await this.loadGithub();
+          this.hostingTimer = setInterval(() => {
+            if (this.view === 'github' && this.gh?.login?.pending) this.loadGithub();
+          }, 3000);
+        } else if (this.view === 'hosting' || this.view === 'domain') {
           this.hostingForm.error = '';
           await this.loadHosting();
           let tick = 0;
@@ -297,7 +306,7 @@ document.addEventListener('alpine:init', () => {
           this.hostingTimer = setInterval(() => {
             tick++;
             const waiting = this.hosting?.loginPending || ['add', 'nameservers', 'ssl'].includes(this.domainState);
-            if (this.view === 'hosting' && !this.hostingForm.busy && (waiting || tick % 10 === 0)) this.loadHosting(true);
+            if ((this.view === 'hosting' || this.view === 'domain') && !this.hostingForm.busy && (waiting || tick % 10 === 0)) this.loadHosting(true);
           }, 6000);
         }
       } catch (e) {
@@ -375,6 +384,7 @@ document.addEventListener('alpine:init', () => {
       }[this.saveState] || '';
     },
     navOn(name) {
+      if (name === 'hosting') return ['hosting', 'domain', 'github'].includes(this.view);
       if (name === 'projects') return this.view === 'projects' || this.view === 'project';
       if (name === 'experience') return this.view === 'experience' || this.view === 'exp';
       return this.view === name;
@@ -835,6 +845,10 @@ document.addEventListener('alpine:init', () => {
       if (this.changes.ahead) {
         return { tone: 'warn', text: 'Waiting to back up to GitHub', sub: `${this.changes.ahead} version${this.changes.ahead === 1 ? '' : 's'} not backed up yet.`, actions: [{ label: 'Try again', kind: 'pri', fn: () => this.retrySync() }] };
       }
+      // Nothing waiting, but the site isn't online yet: say so, and point the way.
+      if (!this.changes.hosted && !this.data.remote) {
+        return { tone: 'idle', text: 'Everything is saved', sub: "Your site isn't online yet.", actions: [{ label: 'Go online', kind: '', fn: () => this.go('#hosting') }] };
+      }
       return {
         tone: 'ok',
         text: 'Everything is live',
@@ -1059,41 +1073,138 @@ document.addEventListener('alpine:init', () => {
       setTimeout(() => window.close(), 300);
     },
 
-    // ---------- setup ----------
-    async loadSetup() {
-      this.setupState = (await api('GET', '/api/setup')).checks;
+    // ---------- welcome (first launch) ----------
+    welcome: { name: '', role: '', palette: 'paper', git: null, busy: '', error: '' },
+    welcomeTimer: null,
+    async loadWelcome() {
+      const r = await api('GET', '/api/welcome');
+      const p = this.data.profile || {};
+      // Sample values stay as placeholders, not as text to delete.
+      Object.assign(this.welcome, {
+        git: r.git,
+        name: p.name && p.name !== 'Your Name' ? p.name : '',
+        role: p.role && !/^what you do/i.test(p.role) ? p.role : '',
+        error: '',
+      });
     },
-    async setupAction(fn) {
-      this.setupForm.error = '';
-      this.setupForm.busy = fn;
+    /** Show the name and look in the preview while typing. */
+    welcomeLive() {
+      clearTimeout(this.welcomeTimer);
+      this.welcomeTimer = setTimeout(async () => {
+        try {
+          const w = this.welcome;
+          if (w.name.trim() && w.role.trim()) this.data.profile = (await api('PUT', '/api/profile', { ...this.data.profile, name: w.name.trim(), role: w.role.trim() })).data;
+          const theme = (await api('GET', '/api/theme')).data;
+          const look = w.palette === 'dark' ? { palette: 'paper', mode: 'dark' } : { palette: w.palette, mode: 'light' };
+          if (theme.palette !== look.palette || theme.mode !== look.mode) await api('PUT', '/api/theme', { ...theme, ...look });
+          this.nonce++;
+        } catch {}
+      }, 500);
+    },
+    async installGit() {
+      this.welcome.busy = 'git';
+      this.welcome.error = '';
       try {
-        if (fn === 'init') await api('POST', '/api/setup/init');
-        if (fn === 'remote') await api('POST', '/api/setup/remote', { url: this.setupForm.remote });
-        if (fn === 'gh') await api('POST', '/api/setup/gh-create', { name: this.setupForm.repoName, visibility: this.setupForm.visibility });
-        if (fn === 'preview') await api('POST', '/api/preview/restart');
-        await this.loadSetup();
-        await this.loadState();
+        await api('POST', '/api/welcome/install-git');
+        await this.loadWelcome();
       } catch (e) {
-        this.setupForm.error = e.message;
+        this.welcome.error = e.message;
       } finally {
-        this.setupForm.busy = '';
+        this.welcome.busy = '';
       }
     },
-    async finishSetup() {
-      this.setupForm.busy = 'finish';
-      this.setupForm.error = '';
+    async finishWelcome() {
+      const w = this.welcome;
+      if (!w.name.trim() || !w.role.trim()) return (w.error = 'Add your name and what you do.');
+      w.busy = 'finish';
+      w.error = '';
       try {
-        if (!this.setupState.repo.hasHead) await api('POST', '/api/setup/init');
-        if (this.setupForm.shortcut && !this.setupState.shortcut.ok) await api('POST', '/api/setup/shortcut');
-        await api('POST', '/api/setup/done');
+        await api('POST', '/api/welcome', { name: w.name, role: w.role, palette: w.palette });
         this.setupDone = true;
         await this.loadState();
-        this.go('#projects');
+        this.nonce++;
+        this.go('#start');
       } catch (e) {
-        this.setupForm.error = e.message;
+        w.error = e.message;
+        if (e.reason === 'git') await this.loadWelcome();
       } finally {
-        this.setupForm.busy = '';
+        w.busy = '';
       }
+    },
+
+    // ---------- start here ----------
+    get startItems() {
+      const p = this.data.profile || {};
+      const projects = this.data.projects || [];
+      const h = this.hosting || {};
+      return [
+        { key: 'name', title: 'Your name and what you do', note: 'Shown at the top of your site.', done: !!p.name && p.name !== 'Your Name' && !/^what you do/i.test(p.role || ''), label: 'Open Profile', hash: '#profile' },
+        { key: 'bio', title: 'Add a photo and a short bio', note: 'Ticks when the sample bio is replaced.', done: !!p.bio && !/^sample bio/i.test(p.bio), label: 'Open Profile', hash: '#profile' },
+        { key: 'project', title: 'Replace the sample project', note: 'Edit it or delete it, and add one of yours.', done: projects.length > 0 && !projects.some((x) => x.slug === 'sample-project' && x.title === 'Sample project'), label: 'Open Projects', hash: '#projects' },
+        { key: 'online', title: 'Put your site online', note: 'Free with Cloudflare. About five minutes.', done: !!h.project, label: 'Go online', hash: '#hosting' },
+        { key: 'publish', title: 'Publish', note: 'Your site goes live with everything above.', done: !!h.lastDeployAt, label: 'Publish', publish: true },
+      ];
+    },
+    get startDone() {
+      return this.startItems.filter((i) => i.done).length;
+    },
+    get startNext() {
+      return this.startItems.find((i) => !i.done)?.key;
+    },
+    get showStart() {
+      return this.setupDone && !this.data.startHidden && this.startDone < this.startItems.length;
+    },
+    async hideStart() {
+      await api('POST', '/api/setup/start-hidden', { hidden: true }).catch(() => {});
+      this.data.startHidden = true;
+      this.go('#profile');
+    },
+
+    // ---------- GitHub backup ----------
+    gh: null,
+    ghForm: { name: 'portfolio', visibility: 'private', url: '', other: false, busy: '', error: '' },
+    async loadGithub() {
+      try {
+        this.gh = await api('GET', '/api/github');
+        if (this.gh.remote && this.data.remote !== this.gh.remote) await this.loadState();
+      } catch (e) {
+        this.ghForm.error = e.message;
+      }
+    },
+    async ghAction(name) {
+      const f = this.ghForm;
+      f.busy = name;
+      f.error = '';
+      try {
+        if (name === 'install') await api('POST', '/api/github/install');
+        if (name === 'login') {
+          const r = await api('POST', '/api/github/login');
+          if (r.error) f.error = r.error;
+        }
+        if (name === 'cancel') await api('POST', '/api/github/login/cancel');
+        if (name === 'create') await api('POST', '/api/github/create', { name: f.name.trim(), visibility: f.visibility });
+        if (name === 'use') await api('POST', '/api/github/use', { url: f.url.trim() });
+        await this.loadGithub();
+        if (name === 'create' || name === 'use') {
+          await this.loadState();
+          f.other = false;
+          this.flash('Backed up to GitHub');
+        }
+      } catch (e) {
+        f.error = e.message;
+      } finally {
+        f.busy = '';
+      }
+    },
+    registrar: 'Hostinger',
+    get registrarSteps() {
+      const d = this.hosting?.domain || 'your domain';
+      return {
+        Hostinger: [`Open Domains, then pick ${d}.`, 'Go to DNS / Nameservers, then Change nameservers.', 'Choose custom nameservers, paste the two above, and save.'],
+        Porkbun: [`Open Domain Management and find ${d}.`, 'Click Details, then Authoritative Nameservers.', 'Replace what is there with the two above, and save.'],
+        Namecheap: [`Open Domain List, then Manage next to ${d}.`, 'Under Nameservers, choose Custom DNS.', 'Paste the two above, then click the green tick.'],
+        'Somewhere else': ["Sign in where you bought the domain and open its settings.", 'Look for Nameservers (sometimes under DNS).', 'Replace them with the two above, and save.'],
+      }[this.registrar];
     },
 
     // ---------- hosting ----------

@@ -45,7 +45,7 @@ a { color: var(--accent); }
 /* main */
 .main { overflow: auto; padding: 22px 28px 40px; min-width: 0; position: relative; }
 .ph { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; min-height: 32px; }
-.ph h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.ph h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; white-space: nowrap; }
 .ph .sub { color: var(--muted); font-size: 13px; }
 .ph .r { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .crumb { color: var(--muted); font-size: 13px; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
@@ -467,3 +467,54 @@ input::placeholder, textarea::placeholder { color: #a8aaad; }
 
 /* Maintenance dialog options */
 .mopts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 13px; }
+
+/* ---------- getting started ---------- */
+/* Welcome: the form beside the live preview, no sidebar or bottom bar */
+.app.welcome { grid-template-columns: minmax(0, 1fr) var(--pv-w, 44%); grid-template-rows: 42px minmax(0, 1fr); }
+.welc { max-width: 560px; padding: 48px 40px 40px; display: flex; flex-direction: column; gap: 20px; }
+.welc h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+.welc .lead { margin: -10px 0 0; color: #5a5c60; font-size: 14.5px; }
+.welc input[type=text] { font-size: 15px; height: 40px; }
+.welc .note { margin: 0; flex-wrap: wrap; }
+.pal-one { height: 40px; border-radius: 5px; display: grid; place-items: center; font-weight: 600; font-size: 14px; position: relative; border: 1px solid var(--line); }
+.pal-one i { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 3px; border-radius: 2px; }
+.btn.big { height: 44px; padding: 0 22px; font-size: 14.5px; font-weight: 500; }
+
+/* Start here */
+.side .prog { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+.meter { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; margin: -4px 0 16px; }
+.meter i { display: block; height: 100%; background: var(--ok); border-radius: 3px; transition: width .3s; }
+.slist { border-top: 1px solid var(--line); }
+.sit2 { display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+.sit2 .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cfd0cc; flex: none; display: grid; place-items: center; font-size: 12px; color: #fff; box-sizing: border-box; }
+.sit2.done .ck { background: var(--ok); border-color: var(--ok); }
+.sit2 .t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sit2 .t b { font-weight: 500; }
+.sit2.done .t b { color: var(--muted); text-decoration: line-through; text-decoration-color: #b5b7b3; }
+.sit2 .t span { font-size: 12.5px; color: var(--muted); }
+.also { font-size: 13px; color: var(--body); margin: 16px 0 10px; }
+
+/* Go online: "Later, if you like" */
+.optlist { display: grid; gap: 8px; }
+.opt { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; color: var(--text); text-decoration: none; min-height: 52px; box-sizing: border-box; }
+.opt:hover { border-color: #b9bbb7; }
+.opt > span:first-child { display: grid; gap: 2px; }
+.opt b { font-weight: 500; font-size: 13.5px; }
+.opt > span > span { font-size: 12.5px; color: var(--muted); }
+.opt .rec { font-size: 11px; color: var(--ok-text); background: var(--ok-tint); border-radius: 4px; padding: 1px 6px; margin-left: 6px; font-weight: 500; }
+
+/* Own domain: progress and the current step */
+.rail { list-style: none; padding: 0; margin: 0 0 18px; display: flex; gap: 6px; flex-wrap: wrap; }
+.rail li { flex: 1 1 0; min-width: 0; display: grid; gap: 6px; font-size: 11.5px; color: #7a7c80; }
+.rail li i { height: 4px; border-radius: 2px; background: var(--line); display: block; }
+.rail li.done { color: var(--ok-text); } .rail li.done i { background: var(--ok); }
+.rail li.now { color: var(--text); font-weight: 500; } .rail li.now i { background: var(--accent); }
+.cur { display: grid; gap: 12px; }
+.cur h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.cur p { margin: 0; font-size: 13.5px; color: var(--body); line-height: 1.55; }
+.cur .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+/* GitHub: the one-time code */
+.code { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--side); border-radius: 8px; padding: 12px 14px; }
+.code b { font-family: var(--mono); font-size: 22px; letter-spacing: .08em; font-weight: 500; margin-right: auto; }
+.cur .tabs button { white-space: nowrap; }

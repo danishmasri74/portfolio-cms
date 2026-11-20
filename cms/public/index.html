@@ -25,11 +25,11 @@
   <div class="pvdead" style="height:100vh;padding:0 64px"><b x-text="fatal"></b><span>Start it again from the desktop shortcut, or run <code style="color:inherit">npm run cms</code> in the portfolio folder.</span></div>
 </template>
 
-<div class="app" :class="{ solo: view === 'setup' }" x-show="ready && !fatal" x-cloak>
+<div class="app" :class="{ welcome: view === 'setup' }" x-show="ready && !fatal" x-cloak>
   <!-- title bar -->
   <header class="tb">
     <b>Portfolio CMS</b>
-    <span class="site" x-text="view === 'setup' ? 'first launch' : (data.settings?.siteUrl || '').replace(/^https?:\/\//, '')"></span>
+    <span class="site" x-show="view !== 'setup'" x-text="(data.settings?.siteUrl || '').replace(/^https?:\/\//, '')"></span>
     <div class="stw" x-show="view !== 'setup'" @click.outside="siteMenu = false">
       <button class="chip" type="button" :class="siteStatus.tone" @click="siteMenu = !siteMenu" :aria-expanded="String(siteMenu)" aria-haspopup="menu"><span class="d"></span><span x-text="siteStatus.text"></span><span class="warnmark" x-show="renewal" title="Your domain expires soon">!</span><span aria-hidden="true">▾</span></button>
       <div class="menu" role="menu" x-show="siteMenu" x-transition.opacity x-cloak>
@@ -49,6 +49,7 @@
 
   <!-- sidebar -->
   <nav class="side" x-show="view !== 'setup'" aria-label="Sections">
+    <a href="#start" :class="{ on: navOn('start') }" x-show="showStart">Start here <span class="prog" x-text="`${startDone} / ${startItems.length}`"></span></a>
     <a href="#profile" :class="{ on: navOn('profile') }">Profile <span class="dot" x-show="sectionDirty('profile')"></span></a>
     <a href="#projects" :class="{ on: navOn('projects') }">Projects <span class="dot" x-show="sectionDirty('projects')"></span></a>
     <a href="#experience" :class="{ on: navOn('experience') }">Experience <span class="dot" x-show="sectionDirty('experience')"></span></a>
@@ -59,7 +60,7 @@
     <div class="sep">
       <span class="gl">Site</span>
       <a href="#history" :class="{ on: navOn('history') }">History</a>
-      <a href="#hosting" :class="{ on: navOn('hosting') }">Hosting</a>
+      <a href="#hosting" :class="{ on: navOn('hosting') }">Go online</a>
       <a href="#settings" :class="{ on: navOn('settings') }">Settings <span class="dot" x-show="sectionDirty('settings')"></span></a>
     </div>
   </nav>
@@ -598,8 +599,8 @@
           <div class="grp">GitHub backup</div>
           <div class="f">
             <span class="okline" x-show="data.remote" x-text="`✓ Every publish is backed up to ${data.remote.replace(/^https?:\/\//, '').replace(/\.git$/, '')}`"></span>
-            <span class="badline" x-show="!data.remote">No GitHub backup yet. Publishing saves versions on this computer only.</span>
-            <button class="btn sm" type="button" style="justify-self:start" @click="go('#setup')" x-text="data.remote ? 'Change' : 'Set up GitHub backup'"></button>
+            <span class="badline" x-show="!data.remote">No GitHub backup yet. Versions are kept on this computer only.</span>
+            <button class="btn sm" type="button" style="justify-self:start" @click="go('#github')" x-text="data.remote ? 'Change' : 'Set up GitHub backup'"></button>
           </div>
 
           <details class="adv">
@@ -614,17 +615,14 @@
       </div>
     </template>
 
-    <!-- ================= HOSTING ================= -->
+    <!-- ================= GO ONLINE ================= -->
     <template x-if="view === 'hosting'">
       <div class="narrow">
-        <div class="ph"><h1>Hosting</h1><span class="sub">Put your site online, free, with Cloudflare Pages.</span></div>
+        <div class="ph"><h1>Go online</h1><span class="sub">Free with Cloudflare. About five minutes, once.</span></div>
 
         <div class="note bad" x-show="hostingForm.error"><span x-text="hostingForm.error"></span></div>
         <template x-if="hosting && hosting.projectMissing">
           <div class="note warn"><span x-text="`The site “${hosting.projectMissing}” was deleted in Cloudflare. Create it again below to keep publishing.`"></span></div>
-        </template>
-        <template x-if="domainState === 'live' && changes.items.some((i) => i.key === 'settings')">
-          <div class="note"><span x-text="`Publish once so links and share previews use https://${hosting.domain}.`"></span><button class="btn sm pri" type="button" @click="publish('')" :disabled="!!busy">Publish</button></div>
         </template>
 
         <div class="pvdead" style="height:auto;padding:24px 0" x-show="!hosting"><b>Checking Cloudflare…</b></div>
@@ -635,9 +633,9 @@
             <li class="step" :class="hosting.connected ? 'done' : 'now'">
               <span class="n" aria-hidden="true" x-text="hosting.connected ? '✓' : '1'"></span>
               <div class="body">
-                <h2>Cloudflare account</h2>
+                <h2>Connect a free Cloudflare account</h2>
                 <template x-if="hosting.connected">
-                  <div class="row"><p x-text="`Signed in as ${hosting.email}`"></p><button class="btn sm" type="button" @click="confirmBar('Disconnect Cloudflare?', 'Your site stays online. Publishing won’t upload until you connect again.', 'Disconnect', () => hostingAction('logout'))" :disabled="!!hostingForm.busy">Disconnect</button></div>
+                  <div class="row"><p x-text="`Signed in as ${hosting.email}`"></p><button class="btn sm ghost" type="button" @click="confirmBar('Disconnect Cloudflare?', 'Your site stays online. Publishing won’t upload until you connect again.', 'Disconnect', () => hostingAction('logout'))" :disabled="!!hostingForm.busy">Disconnect</button></div>
                 </template>
                 <template x-if="!hosting.connected && hosting.loginPending">
                   <div>
@@ -647,7 +645,7 @@
                 </template>
                 <template x-if="!hosting.connected && !hosting.loginPending">
                   <div>
-                    <p x-text="hosting.offline ? 'Cloudflare can’t be reached right now. Check your internet connection.' : 'Opens Cloudflare in your browser to sign in or create a free account. The CMS only asks to manage Pages sites and read your domains.'"></p>
+                    <p x-text="hosting.offline ? 'Cloudflare can’t be reached right now. Check your internet connection.' : 'Opens Cloudflare in your browser to sign in or make a free account. The CMS only asks to manage your sites.'"></p>
                     <p class="badline" x-show="hosting.loginError" x-text="hosting.loginError"></p>
                     <div class="row"><button class="btn sm pri" type="button" @click="hostingAction('login')" :disabled="!!hostingForm.busy">Connect Cloudflare</button></div>
                   </div>
@@ -655,99 +653,215 @@
               </div>
             </li>
 
-            <!-- 2. site -->
+            <!-- 2. address -->
             <li class="step" :class="hosting.project ? 'done' : (hosting.connected ? 'now' : 'later')">
               <span class="n" aria-hidden="true" x-text="hosting.project ? '✓' : '2'"></span>
               <div class="body">
-                <h2>Site</h2>
+                <h2>Choose your address</h2>
                 <template x-if="hosting.project">
-                  <div>
-                    <p><a :href="`https://${hosting.subdomain}`" target="_blank" rel="noopener" x-text="`${hosting.subdomain} ↗`"></a></p>
-                    <div class="row">
-                      <p class="muted" x-text="hosting.lastDeployAt ? `Last uploaded ${fmtDate(hosting.lastDeployAt)}` : 'Nothing uploaded yet'"></p>
-                      <button class="btn sm" type="button" @click="hostingAction('deploy')" :disabled="!!hostingForm.busy || !!busy || !changes.hasHead" x-text="hostingForm.busy === 'deploy' ? 'Uploading…' : 'Upload now'"></button>
-                    </div>
-                  </div>
+                  <p><a :href="`https://${hosting.subdomain}`" target="_blank" rel="noopener" x-text="`${hosting.subdomain} ↗`"></a></p>
                 </template>
                 <template x-if="!hosting.project">
                   <div>
-                    <p>Creates your site with a free address. You can add a domain later.</p>
+                    <p>Your site lives here. You can add your own domain later.</p>
                     <div class="row">
-                      <span class="addr"><input type="text" class="mono" x-model="hostingForm.project" aria-label="Site name" :disabled="!hosting.connected" @keydown.enter="hostingAction('project')"><span>.pages.dev</span></span>
-                      <button class="btn sm" type="button" @click="hostingAction('project')" :disabled="!hosting.connected || !!hostingForm.busy || !hostingForm.project.trim()" x-text="hostingForm.busy === 'project' ? 'Creating…' : 'Create site'"></button>
+                      <span class="addr"><input type="text" class="mono" x-model="hostingForm.project" aria-label="Site address" :disabled="!hosting.connected" @keydown.enter="hostingAction('project')"><span>.pages.dev</span></span>
+                      <button class="btn sm pri" type="button" @click="hostingAction('project')" :disabled="!hosting.connected || !!hostingForm.busy || !hostingForm.project.trim()" x-text="hostingForm.busy === 'project' ? 'Creating…' : 'Create site'"></button>
                     </div>
                   </div>
                 </template>
               </div>
             </li>
 
-            <!-- 3. domain -->
-            <li class="step" :class="domainState === 'live' ? 'done' : (hosting.project ? 'now' : 'later')">
-              <span class="n" aria-hidden="true" x-text="domainState === 'live' ? '✓' : '3'"></span>
+            <!-- 3. publish -->
+            <li class="step" :class="hosting.lastDeployAt ? 'done' : (hosting.project ? 'now' : 'later')">
+              <span class="n" aria-hidden="true" x-text="hosting.lastDeployAt ? '✓' : '3'"></span>
               <div class="body">
-                <h2>Domain</h2>
-
-                <template x-if="domainState === 'none'">
-                  <div>
-                    <p>Optional. Use a domain bought anywhere, like Hostinger or Porkbun.</p>
-                    <div class="row">
-                      <input type="text" class="mono" style="width:240px" x-model="hostingForm.domain" placeholder="yourname.com" aria-label="Domain" :disabled="!hosting.project" @keydown.enter="hostingAction('domain')">
-                      <button class="btn sm" type="button" @click="hostingAction('domain')" :disabled="!hosting.project || !!hostingForm.busy || !hostingForm.domain.trim()">Use domain</button>
-                      <button class="btn sm ghost" type="button" x-show="hostingForm.changing" @click="hostingForm.changing = false; hostingForm.domain = hosting.domain">Cancel</button>
-                    </div>
+                <h2>Publish</h2>
+                <template x-if="hosting.lastDeployAt">
+                  <div class="row">
+                    <p class="muted" x-text="`Last published ${fmtDate(hosting.lastDeployAt)}`"></p>
+                    <button class="btn sm" type="button" @click="hostingAction('deploy')" :disabled="!!hostingForm.busy || !!busy || !changes.hasHead" x-text="hostingForm.busy === 'deploy' ? 'Uploading…' : 'Upload again'"></button>
                   </div>
                 </template>
-
-                <template x-if="domainState === 'add'">
+                <template x-if="!hosting.lastDeployAt">
                   <div>
-                    <p x-text="`Add ${hosting.domain} to your Cloudflare account. This is the one step the CMS can’t do for you.`"></p>
-                    <ol class="howto">
-                      <li>Open Cloudflare and click <b>Add a domain</b>.</li>
-                      <li x-text="`Type ${hosting.domain} and pick the Free plan.`"></li>
-                      <li>Continue past the DNS records screen. Nothing there needs changing.</li>
-                    </ol>
-                    <div class="row"><a class="btn sm pri" href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Open Cloudflare ↗</a><span class="wait">Checking every few seconds</span></div>
+                    <p>Puts your site on that address in a few seconds.</p>
+                    <div class="row"><button class="btn sm" :class="{ pri: hosting.project }" type="button" @click="publish('')" :disabled="!hosting.project || !!busy">Publish</button></div>
                   </div>
                 </template>
-
-                <template x-if="domainState === 'nameservers'">
-                  <div>
-                    <p x-text="`Where you bought ${hosting.domain}, replace its nameservers with these two:`"></p>
-                    <div class="ns">
-                      <template x-for="ns in hosting.zone.nameServers" :key="ns">
-                        <div><code x-text="ns"></code><button class="btn sm" type="button" @click="copy(ns)">Copy</button></div>
-                      </template>
-                    </div>
-                    <dl class="where">
-                      <dt>Hostinger</dt><dd>Domains, then DNS / Nameservers, then Change nameservers</dd>
-                      <dt>Porkbun</dt><dd>Domain management, then Details, then Authoritative nameservers</dd>
-                    </dl>
-                    <p class="muted" x-show="hosting.zone.originalNameServers.length" x-text="`Replace: ${hosting.zone.originalNameServers.join(', ')}`"></p>
-                    <div class="row"><span class="wait">Waiting for the switch. Usually 15 to 60 minutes, sometimes up to a day.</span></div>
-                  </div>
-                </template>
-
-                <template x-if="domainState === 'ssl'">
-                  <div>
-                    <p x-text="`${hosting.domain} is on Cloudflare. Connecting it to your site and setting up the secure certificate.`"></p>
-                    <div class="row"><span class="wait" x-text="(hosting.pagesDomains || []).length ? (hosting.pagesDomains || []).map((d) => `${d.name}: ${d.status}`).join(' · ') : 'Starting'"></span></div>
-                  </div>
-                </template>
-
-                <template x-if="domainState === 'live'">
-                  <p><a :href="`https://${hosting.domain}`" target="_blank" rel="noopener" x-text="`https://${hosting.domain} ↗`"></a> <span class="okline">is live</span></p>
-                </template>
-
-                <p class="badline" x-show="hosting.domainError && domainState !== 'none'" x-text="hosting.domainError"></p>
-                <div class="row" x-show="hosting.domain && domainState !== 'none'">
-                  <button class="btn sm" type="button" @click="hostingForm.changing = true; hostingForm.domain = ''">Change domain</button>
-                  <button class="linkbtn bad" type="button" @click="confirmBar(`Remove ${hosting.domain} from your site?`, 'The site stays online at its pages.dev address.', 'Remove', () => hostingAction('remove'))">Remove domain</button>
-                </div>
               </div>
             </li>
           </ol>
         </template>
-        <p class="hint">To move to a new domain later, use Change domain.</p>
+
+        <h3 class="h4" style="margin-top:22px">Later, if you like</h3>
+        <div class="optlist">
+          <a class="opt" href="#github">
+            <span><b>Back up to GitHub <span class="rec" x-show="!data.remote">Recommended</span></b><span x-text="data.remote ? `✓ Backed up to ${data.remote.replace(/^https?:\/\//, '').replace(/\.git$/, '')}` : 'Keeps every version safe, even if this computer breaks.'"></span></span><span aria-hidden="true">›</span>
+          </a>
+          <a class="opt" href="#domain">
+            <span><b>Use your own domain</b><span x-text="!hosting?.domain ? 'Like yourname.com, bought anywhere.' : domainState === 'live' ? `✓ ${hosting.domain} is live` : `${hosting.domain} · in progress`"></span></span><span aria-hidden="true">›</span>
+          </a>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= OWN DOMAIN ================= -->
+    <template x-if="view === 'domain'">
+      <div class="narrow">
+        <div class="ph"><span class="crumb"><a href="#hosting">Go online</a> /<b>Use your own domain</b></span></div>
+        <p class="lede" x-show="hosting?.subdomain" x-text="`Your site stays on ${hosting?.subdomain} until the domain is ready.`"></p>
+        <div class="note warn" x-show="hosting && !hosting.project"><span>Choose your address on Go online first.</span><a class="btn sm" href="#hosting">Go online</a></div>
+        <div class="note bad" x-show="hostingForm.error"><span x-text="hostingForm.error"></span></div>
+        <template x-if="hosting && hosting.project">
+          <div>
+            <ol class="rail" aria-label="Progress">
+              <template x-for="[k, label, i] in [['none', 'Your domain', 0], ['add', 'Add to Cloudflare', 1], ['nameservers', 'Point it here', 2], ['ssl', 'Secure', 3], ['live', 'Live', 4]]" :key="k">
+                <li :class="{ done: ['none', 'add', 'nameservers', 'ssl', 'live'].indexOf(domainState) > i || domainState === 'live', now: domainState === k && domainState !== 'live' }" :aria-current="domainState === k ? 'step' : null"><i></i><span x-text="label"></span></li>
+              </template>
+            </ol>
+
+            <template x-if="domainState === 'none'">
+              <div class="cur">
+                <h2>What's your domain?</h2>
+                <div class="row">
+                  <input type="text" class="mono" style="width:260px" x-model="hostingForm.domain" placeholder="yourname.com" aria-label="Domain" @keydown.enter="hostingAction('domain')">
+                  <button class="btn sm pri" type="button" @click="hostingAction('domain')" :disabled="!!hostingForm.busy || !hostingForm.domain.trim()">Continue</button>
+                  <button class="btn sm ghost" type="button" x-show="hostingForm.changing" @click="hostingForm.changing = false; hostingForm.domain = hosting.domain">Cancel</button>
+                </div>
+                <p class="muted">Don't have one yet? Buy one anywhere, usually about USD 10 a year: <a href="https://www.cloudflare.com/products/registrar/" target="_blank" rel="noopener">Cloudflare</a>, <a href="https://porkbun.com" target="_blank" rel="noopener">Porkbun</a> or <a href="https://www.namecheap.com" target="_blank" rel="noopener">Namecheap</a>.</p>
+              </div>
+            </template>
+
+            <template x-if="domainState === 'add'">
+              <div class="cur">
+                <h2 x-text="`Add ${hosting.domain} to Cloudflare`"></h2>
+                <p>The one step the CMS can't do for you.</p>
+                <ol class="howto">
+                  <li>Open Cloudflare and click <b>Add a domain</b>.</li>
+                  <li x-text="`Type ${hosting.domain} and pick the Free plan.`"></li>
+                  <li>Continue past the DNS records screen. Nothing there needs changing.</li>
+                </ol>
+                <div class="row"><a class="btn sm pri" href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Open Cloudflare ↗</a><span class="wait">Checking every few seconds</span></div>
+              </div>
+            </template>
+
+            <template x-if="domainState === 'nameservers'">
+              <div class="cur">
+                <h2 x-text="`Point ${hosting.domain} here`"></h2>
+                <p>Where you bought the domain, replace its two nameservers with these:</p>
+                <div class="ns">
+                  <template x-for="ns in hosting.zone.nameServers" :key="ns">
+                    <div><code x-text="ns"></code><button class="btn sm" type="button" @click="copy(ns)">Copy</button></div>
+                  </template>
+                </div>
+                <div class="tabs" role="tablist" aria-label="Where you bought it" style="margin:6px 0 0">
+                  <template x-for="r in ['Hostinger', 'Porkbun', 'Namecheap', 'Somewhere else']" :key="r">
+                    <button type="button" role="tab" :class="{ on: registrar === r }" :aria-selected="String(registrar === r)" @click="registrar = r" x-text="r"></button>
+                  </template>
+                </div>
+                <ol class="howto"><template x-for="s in registrarSteps" :key="s"><li x-text="s"></li></template></ol>
+                <p class="muted" x-show="hosting.zone.originalNameServers.length" x-text="`Replace: ${hosting.zone.originalNameServers.join(', ')}`"></p>
+                <div class="row"><span class="wait">Waiting for the switch. Usually 15 to 60 minutes, sometimes a day. You can close the CMS; it carries on when you open it again.</span></div>
+              </div>
+            </template>
+
+            <template x-if="domainState === 'ssl'">
+              <div class="cur">
+                <h2>Setting up the secure connection</h2>
+                <p x-text="`${hosting.domain} is on Cloudflare. Connecting it to your site and adding the padlock (https). This happens by itself.`"></p>
+                <div class="row"><span class="wait" x-text="(hosting.pagesDomains || []).length ? (hosting.pagesDomains || []).map((d) => `${d.name}: ${d.status}`).join(' · ') : 'Starting'"></span></div>
+              </div>
+            </template>
+
+            <template x-if="domainState === 'live'">
+              <div class="cur">
+                <h2><a :href="`https://${hosting.domain}`" target="_blank" rel="noopener" x-text="`${hosting.domain} ↗`"></a> <span class="okline">is live</span></h2>
+                <p>Both the plain and www. addresses work. You'll be reminded 30 days before it needs renewing.</p>
+                <div class="note" x-show="changes.items.some((i) => i.key === 'settings')"><span x-text="`Publish once so links and share previews use https://${hosting.domain}.`"></span><button class="btn sm pri" type="button" @click="publish('')" :disabled="!!busy">Publish</button></div>
+              </div>
+            </template>
+
+            <p class="badline" x-show="hosting.domainError && domainState !== 'none'" x-text="hosting.domainError"></p>
+            <div class="row" x-show="hosting.domain && domainState !== 'none'" style="margin-top:18px">
+              <button class="btn sm" type="button" @click="hostingForm.changing = true; hostingForm.domain = ''">Change domain</button>
+              <button class="linkbtn bad" type="button" @click="confirmBar(`Stop using ${hosting.domain}?`, `Your site stays online at ${hosting.subdomain}.`, 'Stop using it', () => hostingAction('remove'))">Stop using it</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- ================= GITHUB BACKUP ================= -->
+    <template x-if="view === 'github'">
+      <div class="narrow">
+        <div class="ph"><span class="crumb"><a href="#hosting">Go online</a> /<b>Back up to GitHub</b></span></div>
+        <p class="lede">A safe copy of every version, online. Free.</p>
+        <div class="note bad" x-show="ghForm.error"><span x-text="ghForm.error"></span></div>
+        <div class="pvdead" style="height:auto;padding:24px 0" x-show="!gh"><b>Checking GitHub…</b></div>
+
+        <template x-if="gh && gh.remote && !ghForm.other">
+          <div class="cur">
+            <h2 class="okline" x-text="`✓ Backed up to ${gh.remote.replace(/^https?:\/\//, '').replace(/\.git$/, '')}`"></h2>
+            <p>Every publish adds a version to the backup by itself.</p>
+            <div class="row"><button class="btn sm" type="button" @click="ghForm.other = true">Use a different repository</button></div>
+          </div>
+        </template>
+
+        <template x-if="gh && (!gh.remote || ghForm.other)">
+          <div>
+            <ol class="steps">
+              <li class="step" :class="gh.user ? 'done' : 'now'">
+                <span class="n" aria-hidden="true" x-text="gh.user ? '✓' : '1'"></span>
+                <div class="body">
+                  <h2>Sign in to GitHub</h2>
+                  <template x-if="gh.user"><p x-text="`Signed in as ${gh.user}`"></p></template>
+                  <template x-if="!gh.user && !gh.gh">
+                    <div>
+                      <p>Signing in uses the GitHub app for Windows. It's free and takes a minute to install.</p>
+                      <div class="row"><button class="btn sm pri" type="button" @click="ghAction('install')" :disabled="!!ghForm.busy" x-text="ghForm.busy === 'install' ? 'Installing… Windows may ask for permission' : 'Install it'"></button></div>
+                    </div>
+                  </template>
+                  <template x-if="!gh.user && gh.gh && !gh.login?.pending">
+                    <div>
+                      <p>Opens GitHub in your browser. You approve it there, so the CMS never sees your password.</p>
+                      <div class="row"><button class="btn sm pri" type="button" @click="ghAction('login')" :disabled="!!ghForm.busy" x-text="ghForm.busy === 'login' ? 'Getting a code…' : 'Sign in to GitHub'"></button></div>
+                      <p class="muted">No account yet? <a href="https://github.com/signup" target="_blank" rel="noopener">Create one free ↗</a>, then come back.</p>
+                    </div>
+                  </template>
+                  <template x-if="!gh.user && gh.login?.pending">
+                    <div>
+                      <p>A GitHub page opened in your browser. Enter this code there, then click <b>Authorize</b>.</p>
+                      <div class="code"><b x-text="gh.login.code"></b><button class="btn sm" type="button" @click="copy(gh.login.code)">Copy code</button><a class="btn sm" href="https://github.com/login/device" target="_blank" rel="noopener">Open GitHub ↗</a></div>
+                      <div class="row"><span class="wait">Waiting for you in the browser</span><button class="btn sm ghost" type="button" @click="ghAction('cancel')">Cancel</button></div>
+                    </div>
+                  </template>
+                  <p class="badline" x-show="!gh.user && gh.login?.error" x-text="gh.login?.error"></p>
+                </div>
+              </li>
+              <li class="step" :class="gh.user ? 'now' : 'later'">
+                <span class="n" aria-hidden="true">2</span>
+                <div class="body">
+                  <h2>Name your backup</h2>
+                  <div class="row">
+                    <input type="text" class="mono" style="width:220px" x-model="ghForm.name" aria-label="Backup name" :disabled="!gh.user">
+                    <span class="seg"><button type="button" :class="{ on: ghForm.visibility === 'private' }" @click="ghForm.visibility = 'private'" :disabled="!gh.user">Private</button><button type="button" :class="{ on: ghForm.visibility === 'public' }" @click="ghForm.visibility = 'public'" :disabled="!gh.user">Public</button></span>
+                    <button class="btn sm pri" type="button" @click="ghAction('create')" :disabled="!gh.user || !!ghForm.busy || !ghForm.name.trim()" x-text="ghForm.busy === 'create' ? 'Creating…' : 'Create backup'"></button>
+                  </div>
+                  <p class="muted">Private means only you can see it. Your site stays public either way.</p>
+                </div>
+              </li>
+            </ol>
+            <details class="adv" style="margin-top:18px">
+              <summary>Already have a repository? <span>Use its address</span></summary>
+              <div class="row" style="margin-top:10px">
+                <input type="url" class="mono" style="flex:1;min-width:240px" x-model="ghForm.url" placeholder="https://github.com/you/portfolio.git" aria-label="Repository address">
+                <button class="btn sm" type="button" @click="ghAction('use')" :disabled="!!ghForm.busy || !ghForm.url.trim()" x-text="ghForm.busy === 'use' ? 'Connecting…' : 'Connect'"></button>
+              </div>
+            </details>
+          </div>
+        </template>
       </div>
     </template>
 
@@ -763,57 +877,60 @@
       </div>
     </template>
 
-    <!-- ================= SETUP ================= -->
-    <template x-if="view === 'setup' && setupState">
-      <div class="setup">
-        <div>
-          <h1>Set up the CMS</h1>
-          <p class="lead">This only happens once. Each step checks itself.</p>
-          <div class="stp" :class="setupState.folder.ok ? 'done' : 'bad'"><span class="n" x-text="setupState.folder.ok ? '✓' : '1'"></span><span><b>Portfolio folder</b><span class="s mono" x-text="setupState.folder.path"></span></span></div>
-          <div class="stp" :class="setupState.git.ok ? 'done' : 'bad'"><span class="n" x-text="setupState.git.ok ? '✓' : '2'"></span><span><b>Git</b>
-            <span class="s" x-text="setupState.git.ok ? `Git ${setupState.git.version} found` : 'Git is not installed.'"></span>
-            <span class="acts" x-show="!setupState.git.ok"><a class="btn sm" href="https://git-scm.com/download/win" target="_blank" rel="noopener">Get Git for Windows ↗</a><button class="btn sm ghost" type="button" @click="loadSetup()">Check again</button></span></span></div>
-          <div class="stp" :class="setupState.repo.hasHead ? 'done' : ''"><span class="n" x-text="setupState.repo.hasHead ? '✓' : '3'"></span><span><b>First version</b>
-            <span class="s" x-text="setupState.repo.hasHead ? 'History started' : 'Saves the current content as the first version in history.'"></span>
-            <span class="acts" x-show="!setupState.repo.hasHead"><button class="btn sm" type="button" @click="setupAction('init')" :disabled="setupForm.busy" x-text="setupForm.busy === 'init' ? 'Saving…' : 'Save first version'"></button></span></span></div>
-          <div class="stp" :class="setupState.github.ok ? 'done' : (setupState.github.url ? 'bad' : '')"><span class="n" x-text="setupState.github.ok ? '✓' : '4'"></span><span><b>GitHub backup</b>
-            <span class="s" x-show="setupState.github.ok" x-text="`Connected to ${setupState.github.url}`"></span>
-            <span class="s" x-show="!setupState.github.ok && setupState.github.url" x-text="`Can't reach ${setupState.github.url}. ${setupState.github.message}`"></span>
-            <span class="s" x-show="!setupState.github.url">GitHub keeps a backup of every version. You can skip this and set it up later in Settings.</span>
-            <template x-if="!setupState.github.ok">
-              <span>
-                <span class="acts" x-show="setupState.github.ghAvailable"><input type="text" x-model="setupForm.repoName" aria-label="Backup name on GitHub" style="width:180px"><select x-model="setupForm.visibility" style="width:110px" aria-label="Visibility"><option value="private">Private</option><option value="public">Public</option></select><button class="btn sm" type="button" @click="setupAction('gh')" :disabled="setupForm.busy" x-text="setupForm.busy === 'gh' ? 'Creating…' : 'Create on GitHub'"></button></span>
-                <span class="acts"><input type="url" class="mono" x-model="setupForm.remote" placeholder="https://github.com/you/portfolio.git" aria-label="Existing GitHub address"><button class="btn sm" type="button" @click="setupAction('remote')" :disabled="setupForm.busy || !setupForm.remote">Use existing</button></span>
-              </span>
-            </template></span></div>
-          <div class="stp" :class="setupState.preview.ok ? 'done' : ''"><span class="n" x-text="setupState.preview.ok ? '✓' : '5'"></span><span><b>Preview</b>
-            <span class="s" x-text="setupState.preview.ok ? `Running on ${setupState.preview.url}` : 'Starting…'"></span>
-            <span class="acts" x-show="!setupState.preview.ok"><button class="btn sm ghost" type="button" @click="setupAction('preview')">Check again</button></span></span></div>
-          <div class="stp" :class="setupState.shortcut.ok ? 'done' : ''"><span class="n" x-text="setupState.shortcut.ok ? '✓' : '6'"></span><span><b>Desktop shortcut</b>
-            <span class="s" x-show="setupState.shortcut.ok">"Portfolio CMS" is on your desktop</span>
-            <label class="chk" x-show="!setupState.shortcut.ok" style="margin-top:6px;display:flex"><input type="checkbox" x-model="setupForm.shortcut">Add "Portfolio CMS" to the desktop</label></span></div>
-          <p class="badline" x-show="setupForm.error" x-text="setupForm.error" style="margin-top:14px"></p>
-          <div class="fin"><button class="btn pri" type="button" @click="finishSetup()" :disabled="setupForm.busy || !setupState.git.ok" x-text="setupForm.busy === 'finish' ? 'Finishing…' : 'Open CMS'"></button><span x-text="setupState.github.ok ? '' : 'You can set up GitHub backup later in Settings.'"></span></div>
+    <!-- ================= WELCOME (first launch) ================= -->
+    <template x-if="view === 'setup'">
+      <div class="welc" x-effect="welcome.name; welcome.role; welcome.palette; welcomeLive()">
+        <h1>Welcome. Let's make it yours.</h1>
+        <p class="lead">Three quick things. You can change all of them later.</p>
+        <template x-if="welcome.git === false">
+          <div class="note warn">
+            <span><b>Git isn't installed yet.</b> It keeps the versions of your site, so you can always go back.</span>
+            <button class="btn sm pri" type="button" @click="installGit()" :disabled="!!welcome.busy" x-text="welcome.busy === 'git' ? 'Installing… Windows may ask for permission' : 'Install Git'"></button>
+            <a class="btn sm ghost" href="https://git-scm.com/download/win" target="_blank" rel="noopener">Install it myself ↗</a>
+          </div>
+        </template>
+        <div class="f"><label for="w-name">Your name</label><input id="w-name" type="text" x-model="welcome.name" placeholder="Your Name" maxlength="60" autocomplete="name"></div>
+        <div class="f"><label for="w-role">What you do</label><input id="w-role" type="text" x-model="welcome.role" placeholder="Software engineering student" maxlength="80"></div>
+        <div class="f">
+          <span class="lb" id="w-look">Pick a look</span>
+          <div class="pals" role="group" aria-labelledby="w-look">
+            <template x-for="[key, label, bg, fg, ac] in [['paper', 'Paper', '#fbfbfa', '#17181a', '#2446c7'], ['warm', 'Warm', '#faf6ef', '#1e1a15', '#c2410c'], ['cool', 'Cool', '#f6f8fb', '#131822', '#0f766e'], ['dark', 'Dark', '#131415', '#ececea', '#7b93ff']]" :key="key">
+              <button type="button" class="pal" :class="{ on: welcome.palette === key }" :aria-pressed="String(welcome.palette === key)" @click="welcome.palette = key">
+                <span class="pal-one" :style="`background:${bg};color:${fg}`">Aa<i :style="`background:${ac}`"></i></span>
+                <span x-text="label"></span>
+              </button>
+            </template>
+          </div>
+          <span class="help">More colours, fonts and layouts in Appearance.</span>
         </div>
-        <div class="aside">
-          <h2>Good to know</h2>
-          <dl>
-            <div><dt>Where content lives</dt><dd>Plain files in this folder. Each publish saves a version and backs it up to GitHub.</dd></div>
-            <div><dt>GitHub sign-in</dt><dd>Handled by Git's own login window. The CMS never sees your password.</dd></div>
-            <div><dt>Going live</dt><dd>After setup, open <b>Hosting</b> in the sidebar to connect Cloudflare and your domain.</dd></div>
-          </dl>
-          <h2>What's in the folder</h2>
-<pre>content/      your text and settings
-site/public/  photos, screenshots, résumé
-site/         the Astro site
-cms/          this app</pre>
+        <p class="badline" x-show="welcome.error" x-text="welcome.error"></p>
+        <div><button class="btn pri big" type="button" @click="finishWelcome()" :disabled="!!welcome.busy || welcome.git === false" x-text="welcome.busy === 'finish' ? 'Getting things ready…' : 'Start editing →'"></button></div>
+      </div>
+    </template>
+
+    <!-- ================= START HERE ================= -->
+    <template x-if="view === 'start'">
+      <div class="narrow">
+        <div class="ph"><h1>Start here</h1><span class="sub">Five steps to a site that's yours. They tick themselves.</span></div>
+        <div class="meter" role="progressbar" :aria-valuenow="startDone" aria-valuemin="0" :aria-valuemax="startItems.length" :aria-label="`${startDone} of ${startItems.length} done`"><i :style="`width:${startDone / startItems.length * 100}%`"></i></div>
+        <div class="slist">
+          <template x-for="it in startItems" :key="it.key">
+            <div class="sit2" :class="{ done: it.done }">
+              <span class="ck" aria-hidden="true" x-text="it.done ? '✓' : ''"></span>
+              <div class="t"><b x-text="it.title"></b><span x-text="it.note"></span></div>
+              <template x-if="!it.done && !it.publish"><a class="btn" :class="{ pri: startNext === it.key }" :href="it.hash" x-text="it.label"></a></template>
+              <template x-if="!it.done && it.publish"><button class="btn" :class="{ pri: startNext === it.key }" type="button" @click="publish('')" :disabled="!hosting?.project || !!busy">Publish</button></template>
+            </div>
+          </template>
         </div>
+        <p class="also">Also worth a look: <a href="#experience">Experience</a>, <a href="#toolkit">Toolkit</a> and <a href="#appearance">Appearance</a>.</p>
+        <button class="linkbtn" type="button" style="color:var(--muted)" @click="hideStart()">Hide this page</button>
       </div>
     </template>
   </main>
 
   <!-- preview -->
-  <section class="pv" x-show="view !== 'setup'" aria-label="Preview">
+  <section class="pv" aria-label="Preview">
     <div class="pvh">
       <template x-if="view !== 'settings'">
         <span class="seg"><button type="button" :class="{ on: previewMode === 'desktop' }" @click="previewMode = 'desktop'">Desktop</button><button type="button" :class="{ on: previewMode === 'phone' }" @click="previewMode = 'phone'">Phone</button></span>

@@ -15,6 +15,7 @@ import * as gitops from './lib/gitops.js';
 import * as preview from './lib/preview.js';
 import * as setup from './lib/setup.js';
 import * as hosting from './lib/hosting.js';
+import * as github from './lib/github.js';
 import { checkLinks } from './lib/links.js';
 import { domainExpiry } from './lib/domain.js';
 
@@ -100,6 +101,7 @@ app.get('/api/state', async (c) => {
   const cfg = setup.readConfig();
   return ok(c, {
     setupDone: !!cfg.setupDone,
+    startHidden: !!cfg.startHidden,
     profile: store.getSingle('profile'),
     toolkit: store.getSingle('toolkit'),
     settings: store.getSingle('settings'),
@@ -409,6 +411,62 @@ app.post('/api/setup/shortcut', async (c) => {
   return ok(c);
 });
 app.post('/api/setup/done', (c) => ok(c, { config: setup.writeConfig({ setupDone: true }) }));
+app.post('/api/setup/start-hidden', async (c) => ok(c, { config: setup.writeConfig({ startHidden: !!(await c.req.json()).hidden }) }));
+
+// ---------- welcome (first launch) ----------
+app.get('/api/welcome', async (c) => ok(c, { git: await github.hasGit(), preview: preview.previewState() }));
+app.post('/api/welcome/install-git', async (c) => {
+  const r = await github.installGit();
+  return r.ok ? ok(c) : fail(c, r.message);
+});
+app.post('/api/welcome', async (c) => {
+  const { name, role, palette } = await c.req.json();
+  if (!(await github.hasGit())) return fail(c, 'Git is needed first.', { reason: 'git' });
+  try {
+    const profile = store.saveSingle('profile', { ...store.getSingle('profile'), name: String(name || '').trim(), role: String(role || '').trim() });
+    const settings = store.getSingle('settings');
+    // The sample page title becomes "Name · role". A title someone already wrote stays.
+    if (!settings.title || /^your name(\s|$)/i.test(settings.title)) {
+      store.saveSingle('settings', { ...settings, title: `${profile.name} · ${profile.role}`.slice(0, 70) });
+    }
+    const theme = store.getSingle('theme');
+    if (['paper', 'warm', 'cool', 'stone'].includes(palette)) store.saveSingle('theme', { ...theme, palette });
+    if (palette === 'dark') store.saveSingle('theme', { ...theme, palette: 'paper', mode: 'dark' });
+  } catch (e) {
+    if (e instanceof store.ValidationError) return fail(c, e.message, { fields: e.fields }, 422);
+    throw e;
+  }
+  try {
+    images.generateFavicon(store.getSingle('profile'), store.getSingle('theme'));
+  } catch {}
+  if (store.getSingle('settings').shareImage === 'generated') await shareImage().catch(() => {});
+  await setup.initRepo();
+  if (!(await setup.shortcutExists())) await setup.createShortcut().catch(() => {});
+  setup.writeConfig({ setupDone: true });
+  return ok(c);
+});
+
+// ---------- GitHub backup ----------
+const ghCall = (fn) => async (c) => {
+  try {
+    return ok(c, await fn(c));
+  } catch (e) {
+    return fail(c, e.message);
+  }
+};
+app.get('/api/github', ghCall(() => github.status()));
+app.post('/api/github/install', ghCall(async () => {
+  const r = await github.installGh();
+  if (!r.ok) throw new Error(r.message);
+  return {};
+}));
+app.post('/api/github/login', ghCall(() => github.startLogin()));
+app.post('/api/github/login/cancel', ghCall(() => (github.cancelLogin(), {})));
+app.post('/api/github/create', ghCall(async (c) => {
+  const { name, visibility } = await c.req.json();
+  return github.createBackup(String(name || '').trim(), visibility);
+}));
+app.post('/api/github/use', ghCall(async (c) => github.useExisting(String((await c.req.json()).url || '').trim())));
 app.put('/api/setup/config', async (c) => {
   const { previewPort } = await c.req.json();
   const port = Number(previewPort);

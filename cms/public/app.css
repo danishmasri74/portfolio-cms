@@ -22,7 +22,7 @@ a { color: var(--accent); }
 .app.solo { grid-template-columns: 1fr; grid-template-rows: 42px minmax(0, 1fr); }
 
 /* title bar */
-.tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.tb { grid-column: 1 / -1; position: relative; z-index: 50; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .tb b { font-weight: 600; }
 .tb .site { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .tb .mnt { display: flex; align-items: center; gap: 6px; color: var(--warn-text); font-weight: 500; }
@@ -401,3 +401,69 @@ input::placeholder, textarea::placeholder { color: #a8aaad; }
 .tb .renew.bad::before { background: var(--bad); }
 .tb .renew:hover { text-decoration: underline; }
 .linkrep { margin-bottom: 18px; }
+
+/* ---------- consistency pass: status, saving, publish panel ---------- */
+/* Top bar: one chip for the site's state, with its menu */
+.stw { position: relative; }
+.chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--field); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; background: #fff; color: var(--text); cursor: pointer; font-family: inherit; }
+.chip:hover, .chip[aria-expanded='true'] { border-color: var(--text); }
+.chip .d { width: 7px; height: 7px; border-radius: 50%; background: #a0a2a6; }
+.chip.ok .d { background: var(--ok); } .chip.warn .d { background: var(--warn); } .chip.bad .d { background: var(--bad); }
+.chip .warnmark { width: 15px; height: 15px; border-radius: 50%; background: var(--warn); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; width: 300px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 20, 20, .10); padding: 6px; z-index: 40; display: flex; flex-direction: column; }
+.menu .mst { padding: 10px 10px 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 4px; display: grid; gap: 3px; }
+.menu .mst b { font-weight: 600; }
+.menu .mst span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.menu .mst span.bad { color: var(--warn-text); }
+.menu a, .menu button { display: flex; justify-content: space-between; align-items: center; min-height: 38px; padding: 0 10px; border-radius: 6px; font: inherit; font-size: 13px; color: var(--text); background: none; border: 0; text-align: left; cursor: pointer; text-decoration: none; }
+.menu a:hover, .menu button:hover { background: #f4f4f2; }
+.menu small { font-size: 12px; color: var(--muted); }
+
+/* Sidebar group labels */
+.side .gl { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 14px 10px 4px; }
+
+/* Save status in page headers (no Save button) */
+.svst { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.svst.error { color: var(--bad-text); }
+.svst.needs-title { color: var(--warn-text); }
+.onsite { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--body); margin-right: 6px; }
+.badge { font-size: 11px; color: var(--muted); background: #f1f1ef; border-radius: 4px; padding: 0 6px; margin-left: 4px; font-weight: 400; }
+.danger-zone { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 10px; }
+
+/* Labels: "Optional" is a grey tag; counters sit at the end */
+.f > label, .lb { justify-content: flex-start; align-items: baseline; }
+.f > label i:not(.opt), .lb i:not(.opt) { margin-left: auto; }
+.f > label i.opt, .lb i.opt { font-family: var(--sans); font-size: 11px; color: #6b6d71; background: #f1f1ef; border-radius: 4px; padding: 0 6px; font-style: normal; }
+
+/* Settings: advanced */
+.adv { grid-column: span 6; border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; }
+.adv summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; min-height: 44px; font-size: 13.5px; font-weight: 500; }
+.adv summary::-webkit-details-marker { display: none; }
+.adv summary span { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.adv summary span::after { content: ' ▸'; }
+.adv[open] summary span::after { content: ' ▾'; }
+.adv[open] { padding-bottom: 14px; }
+
+/* History */
+.hist .r { grid-template-columns: 130px minmax(0, 1fr) 60px 64px; }
+.hist .r .now { font-size: 12px; color: var(--ok-text); }
+
+/* Publish panel: slides over the preview */
+.pubp { position: fixed; top: 42px; right: 0; bottom: 52px; width: min(440px, 100vw); background: #fff; border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(20, 20, 20, .07); padding: 20px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; z-index: 30; }
+.pubp .ph { align-items: flex-start; margin: 0; }
+.pubp h2 { font-size: 18px; font-weight: 600; margin: 0; }
+.pubp .ph .sub { display: block; margin-top: 2px; }
+.pubp .x { margin-left: auto; }
+.pubp .chg .c { grid-template-columns: minmax(0, 1fr) auto; }
+.pubp .chg .c b { display: block; }
+.pchk { background: #f8f8f7; border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; font-size: 13px; }
+.pchk > div, .pchk > div > div { display: flex; gap: 8px; align-items: baseline; }
+.pchk .ok { color: var(--ok-text); } .pchk .bad { color: var(--bad-text); } .pchk .warn { color: var(--warn-text); } .pchk .muted { color: var(--muted); }
+.pchk .spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; align-self: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pubp .go { margin-top: auto; display: grid; gap: 8px; }
+.pubp .go .btn { height: 44px; justify-content: center; font-size: 14px; font-weight: 500; }
+.pubp .pnote { font-size: 12.5px; color: var(--muted); text-align: center; }
+
+/* Maintenance dialog options */
+.mopts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 13px; }

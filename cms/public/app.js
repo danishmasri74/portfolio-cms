@@ -49,6 +49,15 @@ document.addEventListener('alpine:init', () => {
     writeupSnap: '',
     errors: {},
     saving: false,
+    // Autosave: edits save on their own after a short pause. Undo goes back to how the page was when opened.
+    saveState: 'idle', // idle | pending | saving | saved | error | needs-title
+    autoTimer: null,
+    pageStart: '',
+    pageWasNew: false,
+    writeupStart: '',
+    panel: false,
+    siteMenu: false,
+    maintForm: null,
     preview: { status: 'starting', url: null, log: [] },
     previewMode: 'desktop',
     nonce: 1,
@@ -86,14 +95,18 @@ document.addEventListener('alpine:init', () => {
       }
       this.ready = true;
       window.addEventListener('hashchange', () => this.onHash());
+      this.$watch('form', () => this.queueSave());
+      this.$watch('writeup', () => this.queueSave());
       window.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
           e.preventDefault();
-          if (this.canSave) this.save();
+          this.flushSave();
         }
         if (e.key === 'Escape') {
           if (this.picker.open) this.picker.open = false;
           else if (this.modal) this.modal = null;
+          else if (this.siteMenu) this.siteMenu = false;
+          else if (this.panel) this.panel = false;
         }
       });
       window.addEventListener('beforeunload', (e) => {
@@ -180,7 +193,7 @@ document.addEventListener('alpine:init', () => {
       const [a = 'projects', b, c] = parts;
       if (a === 'projects' && b) return { view: 'project', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
       if (a === 'experience' && b) return { view: 'exp', slug: b === 'new' ? null : b, isNew: b === 'new', tab: c === 'writeup' ? 'writeup' : 'details' };
-      const views = ['projects', 'experience', 'profile', 'toolkit', 'sections', 'appearance', 'settings', 'history', 'review', 'setup', 'hosting'];
+      const views = ['projects', 'experience', 'profile', 'toolkit', 'sections', 'appearance', 'settings', 'history', 'setup', 'hosting'];
       return { view: views.includes(a) ? a : 'projects', slug: null, isNew: false, tab: 'details' };
     },
     hashFor(t) {
@@ -203,14 +216,19 @@ document.addEventListener('alpine:init', () => {
         return;
       }
       if (!first && this.dirty) {
+        // Save what's waiting before leaving. Only stop if something can't be saved yet.
         const back = this.hashFor({ view: this.view, slug: this.slug, isNew: this.isNew, tab: this.tab });
         this.ignoreHash = true;
         history.replaceState(null, '', back);
         this.ignoreHash = false;
-        this.confirmBar(`Leave ${this.formName || 'this page'} without saving?`, 'Your edits will be lost.', 'Discard edits', () => {
+        if (await this.flushSave()) {
+          location.hash = this.hashFor(t);
+          return;
+        }
+        this.confirmBar(this.isNew && this.saveState === 'needs-title' ? 'Leave without adding this?' : "Some edits can't be saved yet", this.isNew && this.saveState === 'needs-title' ? 'It needs a title before it can be saved.' : 'Fix the highlighted field, or leave and lose those edits.', 'Leave anyway', () => {
           this.resetDirty();
           location.hash = this.hashFor(t);
-        }, 'Keep editing');
+        }, 'Stay');
         this.bar.whenDirty = true;
         return;
       }
@@ -222,6 +240,8 @@ document.addEventListener('alpine:init', () => {
     },
 
     async loadView() {
+      clearTimeout(this.autoTimer);
+      this.saveState = 'idle';
       this.form = null;
       // Leaving Appearance: reload the preview so unsaved choices don't linger on it.
       if (this.view !== 'appearance' && this.themeSent) {
@@ -263,13 +283,10 @@ document.addEventListener('alpine:init', () => {
           const [s, st] = await Promise.all([api('GET', '/api/settings'), api('GET', '/api/state')]);
           this.data.status = st.status;
           this.data.remote = st.remote;
-          this.form = { settings: s.data, status: st.status, previewPort: st.previewPort };
-        } else if (this.view === 'history' || this.view === 'review') {
+          this.form = { settings: s.data };
+          this.portInput = st.previewPort;
+        } else if (this.view === 'history') {
           this.history = (await api('GET', '/api/history')).items;
-          if (this.view === 'review') {
-            await this.refreshChanges();
-            this.commitMessage = this.defaultMessage();
-          }
         } else if (this.view === 'setup') {
           await this.loadSetup();
         } else if (this.view === 'hosting') {
@@ -291,6 +308,9 @@ document.addEventListener('alpine:init', () => {
         this.flash(e.message);
       }
       this.snap = this.form ? JSON.stringify(this.form) : '';
+      this.pageStart = this.snap;
+      this.pageWasNew = this.isNew;
+      this.writeupStart = this.writeup;
     },
 
     get col() {
@@ -310,6 +330,50 @@ document.addEventListener('alpine:init', () => {
       this.snap = this.form ? JSON.stringify(this.form) : '';
       this.writeupSnap = this.writeup;
     },
+    // ---------- autosave ----------
+    queueSave() {
+      if (!this.canSave) return;
+      if (!this.dirty) {
+        // Edited back to what's already saved: nothing to do, so clear any old error.
+        if (this.saveState === 'error' || this.saveState === 'pending' || this.saveState === 'needs-title') {
+          clearTimeout(this.autoTimer);
+          this.errors = {};
+          this.saveState = this.isNew ? 'idle' : 'saved';
+        }
+        return;
+      }
+      clearTimeout(this.autoTimer);
+      this.saveState = this.isNew && !String(this.form.title || '').trim() ? 'needs-title' : 'pending';
+      if (this.saveState === 'needs-title') return;
+      this.autoTimer = setTimeout(() => this.save(), 700);
+    },
+    /** Save now if anything is waiting. Resolves true when nothing is left unsaved. */
+    async flushSave() {
+      clearTimeout(this.autoTimer);
+      if (!this.canSave || !this.dirty) return true;
+      if (this.isNew && !String(this.form.title || '').trim()) return false;
+      while (this.saving) await new Promise((r) => setTimeout(r, 60));
+      if (!this.dirty) return true;
+      return this.save();
+    },
+    get canUndo() {
+      return !!this.form && !this.pageWasNew && (JSON.stringify(this.form) !== this.pageStart || this.writeup !== this.writeupStart);
+    },
+    undoPage() {
+      this.form = JSON.parse(this.pageStart);
+      this.writeup = this.writeupStart;
+      this.errors = {};
+      this.flash('Back to how it was when you opened it');
+    },
+    get saveText() {
+      return {
+        pending: 'Saving…',
+        saving: 'Saving…',
+        saved: '✓ Saved',
+        error: 'Not saved · fix the highlighted field',
+        'needs-title': 'Add a title to save',
+      }[this.saveState] || '';
+    },
     navOn(name) {
       if (name === 'projects') return this.view === 'projects' || this.view === 'project';
       if (name === 'experience') return this.view === 'experience' || this.view === 'exp';
@@ -327,84 +391,90 @@ document.addEventListener('alpine:init', () => {
       return this.errors[path] || '';
     },
     async save() {
-      if (this.saving) return;
+      if (this.saving || !this.form) return false;
       this.saving = true;
-      this.errors = {};
+      this.saveState = 'saving';
+      // What gets saved. The form itself is never replaced by the server's copy, so typing is never interrupted.
+      const sent = JSON.stringify(this.form);
+      const sentWriteup = this.writeup;
+      const view = this.view;
       try {
-        if (this.view === 'project' || this.view === 'exp') {
+        if (view === 'project' || view === 'exp') {
           const col = this.col;
-          if (this.form.end === '') this.form.end = null;
+          const body = JSON.parse(sent);
+          if (body.end === '') body.end = null;
           if (this.isNew) {
-            const { data } = await api('POST', `/api/${col}`, this.form);
-            if (this.writeup.trim()) await api('PUT', `/api/${col}/${data.slug}/writeup`, { text: this.writeup });
-            this.form = data;
-            this.resetDirty();
-            this.go(`#${col}/${data.slug}${this.tab === 'writeup' ? '/writeup' : ''}`);
+            const { data } = await api('POST', `/api/${col}`, body);
+            if (sentWriteup.trim()) await api('PUT', `/api/${col}/${data.slug}/writeup`, { text: sentWriteup });
+            // Now it exists: switch to its own address without reloading the page you're typing in.
+            this.isNew = false;
+            this.slug = data.slug;
+            this.ignoreHash = true;
+            history.replaceState(null, '', `#${col}/${data.slug}${this.tab === 'writeup' ? '/writeup' : ''}`);
+            this.ignoreHash = false;
           } else {
-            const { data } = await api('PUT', `/api/${col}/${this.slug}`, this.form);
-            if (this.writeup !== this.writeupSnap) await api('PUT', `/api/${col}/${this.slug}/writeup`, { text: this.writeup });
-            this.form = data;
+            await api('PUT', `/api/${col}/${this.slug}`, body);
+            if (sentWriteup !== this.writeupSnap) await api('PUT', `/api/${col}/${this.slug}/writeup`, { text: sentWriteup });
           }
-        } else if (this.view === 'profile') {
-          this.form = (await api('PUT', '/api/profile', this.form)).data;
-          this.data.profile = this.form;
-        } else if (this.view === 'toolkit') {
-          const clean = clone(this.form);
+        } else if (view === 'profile') {
+          this.data.profile = (await api('PUT', '/api/profile', JSON.parse(sent))).data;
+        } else if (view === 'toolkit') {
+          const clean = JSON.parse(sent);
           clean.groups.forEach((g) => g.items.forEach((it) => delete it.auto));
-          this.form = (await api('PUT', '/api/toolkit', clean)).data;
-          this.ensureSvgs(this.form.groups.flatMap((g) => g.items.map((i) => i.icon)));
-        } else if (this.view === 'sections') {
-          this.form = (await api('PUT', '/api/sections', this.form)).data;
-        } else if (this.view === 'appearance') {
-          this.form = (await api('PUT', '/api/theme', this.form)).data;
-        } else if (this.view === 'settings') {
-          const settings = (await api('PUT', '/api/settings', this.form.settings)).data;
-          let status = this.form.status;
-          try {
-            status = (await api('PUT', '/api/status', this.form.status)).data;
-          } catch (e) {
-            if (e.fields) e.fields = Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [`status.${k}`, v]));
-            throw e;
-          }
-          if (Number(this.form.previewPort) !== Number(this.data.previewPort)) {
-            await api('PUT', '/api/setup/config', { previewPort: Number(this.form.previewPort) });
-            this.data.previewPort = Number(this.form.previewPort);
-            await api('POST', '/api/preview/restart');
-          }
-          this.form = { ...this.form, settings, status };
-          this.data.settings = settings;
+          const saved = (await api('PUT', '/api/toolkit', clean)).data;
+          // New items get an icon on the server: copy just those across.
+          saved.groups.forEach((g, gi) => g.items.forEach((it, ii) => {
+            const mine = this.form.groups[gi]?.items[ii];
+            if (mine && mine.icon === undefined) mine.icon = it.icon;
+          }));
+          this.ensureSvgs(saved.groups.flatMap((g) => g.items.map((i) => i.icon)));
+        } else if (view === 'sections') {
+          await api('PUT', '/api/sections', JSON.parse(sent));
+        } else if (view === 'appearance') {
+          await api('PUT', '/api/theme', JSON.parse(sent));
+        } else if (view === 'settings') {
+          this.data.settings = (await api('PUT', '/api/settings', JSON.parse(sent).settings)).data;
         }
-        this.resetDirty();
+        if (this.view !== view) return true;
+        this.snap = JSON.stringify(this.form) === sent ? JSON.stringify(this.form) : sent;
+        this.writeupSnap = sentWriteup;
+        this.errors = {};
+        this.saveState = this.dirty ? 'pending' : 'saved';
         if (this.bar?.whenDirty) this.bar = null;
-        this.result = null;
-        this.flash('Saved');
-        this.nonce++;
+        if (view !== 'appearance') this.nonce++;
         this.refreshChanges();
         return true;
       } catch (e) {
         if (e.fields) {
-          this.errors = this.view === 'settings' && !Object.keys(e.fields).some((k) => k.startsWith('status.') || k === 'previewPort')
-            ? Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [`settings.${k}`, v]))
-            : e.fields;
-          this.$nextTick(() => document.querySelector('.err input, .err textarea')?.focus());
-        } else this.flash(e.message);
+          this.errors = view === 'settings' ? Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [`settings.${k}`, v])) : e.fields;
+          this.saveState = 'error';
+        } else {
+          this.saveState = 'error';
+          this.flash(e.message);
+        }
         return false;
       } finally {
         this.saving = false;
+        // More typing happened while saving: save again shortly.
+        if (this.saveState === 'pending') this.queueSave();
       }
     },
-    cancelEdits() {
-      if (this.isNew) return this.go(this.view === 'exp' ? '#experience' : '#projects');
-      this.form = JSON.parse(this.snap);
-      this.writeup = this.writeupSnap;
-      this.errors = {};
+    portInput: 4321,
+    async applyPort() {
+      const port = Number(this.portInput);
+      if (!Number.isInteger(port) || port < 1024 || port > 65535) return this.flash('Use a number between 1024 and 65535.');
+      if (port === Number(this.data.previewPort)) return;
+      await api('PUT', '/api/setup/config', { previewPort: port });
+      this.data.previewPort = port;
+      await api('POST', '/api/preview/restart');
+      this.flash('Preview restarted on the new port');
     },
     get errorCount() {
       return Object.keys(this.errors).length;
     },
 
     async removeEntry() {
-      this.confirmBar(`Delete ${this.form.title}?`, 'It disappears from the site when you publish. You can undo with Discard until then.', 'Delete', async () => {
+      this.confirmBar(`Delete ${this.form.title}?`, 'It leaves your site when you publish. Until then, Undo it in the Publish panel.', 'Delete', async () => {
         await api('DELETE', `/api/${this.col}/${this.slug}`);
         this.resetDirty();
         this.form = null;
@@ -744,46 +814,44 @@ document.addEventListener('alpine:init', () => {
     get barView() {
       // Prompts about unsaved edits go away by themselves once the edits are saved or undone.
       if (this.bar && !(this.bar.whenDirty && !this.dirty)) return this.bar;
-      if (this.busy === 'publishing') return { tone: 'busy', text: 'Publishing…', sub: this.changes.hosted ? 'Building the site and uploading it to Cloudflare.' : 'Checking the site and sending it to GitHub.' };
-      if (this.busy === 'checking') return { tone: 'busy', text: 'Checking…', sub: 'Building every page to make sure nothing is broken.' };
+      if (this.busy === 'publishing') return { tone: 'busy', text: 'Publishing…', sub: 'Checking your site, then putting it online.' };
+      if (this.busy === 'checking') return { tone: 'busy', text: 'Checking your site…', sub: 'Building every page.' };
       if (this.result) return this.result;
       const n = this.changes.items.length;
       if (n) {
         return {
           tone: 'warn',
-          text: `${n} unpublished change${n === 1 ? '' : 's'}`,
+          text: `${n} change${n === 1 ? '' : 's'} not live yet`,
           sub: this.changes.items.map((i) => i.label).join(', '),
           actions: [
-            { label: 'Discard', kind: 'ghost', fn: () => this.discardAll(), show: this.changes.hasHead },
-            { label: 'Check', kind: '', fn: () => this.runCheck() },
-            { label: 'Review', kind: '', fn: () => this.go('#review') },
-            { label: 'Publish ▸', kind: 'dark', fn: () => this.quickPublish() },
+            { label: 'See changes', kind: '', fn: () => this.openPanel() },
+            { label: 'Publish', kind: 'pri', fn: () => this.publish('') },
           ],
         };
       }
       if (this.changes.undeployed) {
-        return { tone: 'warn', text: 'Saved, not live yet', sub: 'The latest version is in history but not on your site.', actions: [{ label: 'Publish ▸', kind: 'dark', fn: () => this.retrySync() }] };
+        return { tone: 'warn', text: "Your last publish isn't live yet", sub: 'It was saved but not uploaded to your site.', actions: [{ label: 'Publish', kind: 'pri', fn: () => this.retrySync() }] };
       }
       if (this.changes.ahead) {
-        return { tone: 'warn', text: `${this.changes.ahead} publish${this.changes.ahead === 1 ? '' : 'es'} waiting to upload`, sub: 'Saved in history but not on GitHub yet.', actions: [{ label: 'Retry', kind: 'dark', fn: () => this.retrySync() }] };
+        return { tone: 'warn', text: 'Waiting to back up to GitHub', sub: `${this.changes.ahead} version${this.changes.ahead === 1 ? '' : 's'} not backed up yet.`, actions: [{ label: 'Try again', kind: 'pri', fn: () => this.retrySync() }] };
       }
       return {
         tone: 'ok',
-        text: 'Everything published',
-        sub: this.history[0] ? `Last publish ${this.fmtDate(this.history[0].date)}` : '',
-        actions: [{ label: 'Check', kind: '', fn: () => this.runCheck() }, ...(this.liveUrl ? [{ label: 'View live ↗', kind: '', href: this.liveUrl }] : [])],
+        text: 'Everything is live',
+        sub: this.history[0] ? `Last published ${this.fmtDate(this.history[0].date)}` : '',
+        actions: this.liveUrl ? [{ label: 'View site ↗', kind: '', href: this.liveUrl }] : [],
       };
     },
-    discardAll() {
-      const labels = this.changes.items.map((i) => i.label);
-      this.confirmBar(`Discard ${labels.length} unpublished change${labels.length === 1 ? '' : 's'}?`, `${labels.join(', ')} go back to the live version.`, 'Discard', async () => {
-        try {
-          await api('POST', '/api/discard', {});
-          await this.afterDiscard();
-        } catch (e) {
-          this.flash(e.message);
-        }
-      });
+    // ---------- publish panel ----------
+    async openPanel() {
+      if (!(await this.flushSave())) return this.flash('Fix the highlighted field first.');
+      this.siteMenu = false;
+      this.panel = true;
+      this.commitMessage = '';
+      await this.refreshChanges();
+      // Check the site by itself, unless nothing changed since the last check.
+      const sig = JSON.stringify(this.changes.items.map((i) => i.key + (i.summary || '')));
+      if (this.changes.items.length && (!this.lastCheck || this.lastCheck.sig !== sig) && !this.busy) this.runCheck(sig);
     },
     async discardOne(item) {
       try {
@@ -799,53 +867,21 @@ document.addEventListener('alpine:init', () => {
       await this.refreshChanges();
       await this.loadView();
       this.nonce++;
-      this.flash('Discarded');
+      this.flash('Undone');
     },
-    async runCheck() {
-      if (this.dirty) return this.needSave(() => this.runCheck());
-      this.result = null;
+    async runCheck(sig = '') {
       this.busy = 'checking';
       try {
         const { check } = await api('POST', '/api/check');
-        this.lastCheck = { ...check, at: new Date().toISOString() };
-        const broken = check.links?.broken || [];
-        const built = `${check.pages ? `${check.pages} pages built` : 'All pages built'} in ${check.seconds} s`;
-        if (!check.ok) this.result = { tone: 'bad', text: 'Check failed', sub: check.message, actions: [{ label: 'Retry', kind: 'dark', fn: () => this.runCheck() }] };
-        else if (broken.length) {
-          this.result = {
-            tone: 'warn',
-            text: `${broken.length} link${broken.length === 1 ? ' looks' : 's look'} broken`,
-            sub: broken.map((b) => `${b.where[0]}: ${b.reason}`).join(' · '),
-            actions: [{ label: 'See details', kind: '', fn: () => { this.result = null; this.go('#review'); } }, { label: 'OK', kind: 'ghost', fn: () => (this.result = null) }],
-          };
-        } else {
-          const linkNote = check.links?.offline ? " Links weren't checked because you're offline." : check.links ? ` ${check.links.checked} links working.` : '';
-          this.result = { tone: 'ok', text: 'Check passed', sub: `${built}, nothing broken.${linkNote}`, actions: [{ label: 'OK', kind: 'ghost', fn: () => (this.result = null) }] };
-        }
+        this.lastCheck = { ...check, sig, at: new Date().toISOString() };
       } catch (e) {
         this.flash(e.message);
       } finally {
         this.busy = null;
       }
     },
-    needSave(then) {
-      this.bar = {
-        whenDirty: true,
-        tone: 'warn',
-        text: `Save ${this.formName} first?`,
-        sub: 'Unsaved edits are not included otherwise.',
-        actions: [
-          { label: 'Cancel', kind: 'ghost', fn: () => (this.bar = null) },
-          { label: 'Save and continue', kind: 'pri', fn: async () => { this.bar = null; if (await this.save()) then(); } },
-        ],
-      };
-    },
-    quickPublish() {
-      if (!this.data.settings?.quickPublish) return this.go('#review');
-      this.publish('');
-    },
     async publish(message) {
-      if (this.dirty) return this.needSave(() => this.publish(message));
+      if (!(await this.flushSave())) return this.flash('Fix the highlighted field first.');
       this.result = null;
       this.busy = 'publishing';
       try {
@@ -872,34 +908,36 @@ document.addEventListener('alpine:init', () => {
       const live = this.liveUrl || r.url || this.data.settings?.siteUrl;
       const domain = (live || '').replace(/^https?:\/\//, '');
       if (r.result === 'published') {
-        const backup = r.backupFailed ? " GitHub backup didn't upload. It retries on the next publish." : '';
-        this.result = { tone: 'ok', text: `Published at ${this.fmtTime(r.at)}`, sub: `Live on ${domain} ${this.changes.hosted ? 'in a few seconds' : 'in about a minute'}.${backup}`, actions: [{ label: 'View live ↗', kind: '', href: live }, { label: 'OK', kind: 'ghost', fn: () => (this.result = null) }] };
-        if (this.view === 'review') this.go('#projects');
+        const backup = r.backupFailed ? " The GitHub backup didn't upload. It tries again next time." : '';
+        this.panel = false;
+        this.result = { tone: 'ok', text: `Published at ${this.fmtTime(r.at)}`, sub: `Live on ${domain} ${this.changes.hosted ? 'in a few seconds' : 'in about a minute'}.${backup}`, actions: [{ label: 'View site ↗', kind: '', href: live }, { label: 'OK', kind: 'ghost', fn: () => (this.result = null) }] };
       } else if (r.result === 'local') {
-        this.result = { tone: 'warn', text: 'Saved to history', sub: 'Connect GitHub in Settings to put the site online.', actions: [{ label: 'Open Settings', kind: '', fn: () => { this.result = null; this.go('#settings'); } }] };
+        this.panel = false;
+        this.result = { tone: 'warn', text: 'Saved as a version', sub: 'Set up GitHub backup and Hosting to put it online.', actions: [{ label: 'Open Settings', kind: '', fn: () => { this.result = null; this.go('#settings'); } }] };
       } else if (r.result === 'nothing') {
         this.flash('Nothing to publish');
       } else if (r.result === 'check-failed') {
         this.lastCheck = { ...r.check, at: new Date().toISOString() };
-        this.result = { tone: 'bad', text: 'Publish stopped: Check failed', sub: r.check.message, actions: [{ label: 'Retry', kind: 'dark', fn: () => this.publish('') }] };
+        this.panel = true;
+        this.result = { tone: 'bad', text: "Couldn't publish: a page didn't build", sub: r.check.message, actions: [{ label: 'Try again', kind: 'pri', fn: () => this.publish('') }] };
       } else if (r.result === 'deploy-failed') {
         const m = {
-          network: ["Couldn't reach Cloudflare", "Your changes are saved. Retry when you're back online.", 'Retry'],
+          network: ["Couldn't reach Cloudflare", "Your changes are kept. Try again when you're back online.", 'Try again'],
           auth: ['Cloudflare needs you to sign in again', 'Reconnect in Hosting, then publish.', 'Open Hosting'],
-          build: ['Publish stopped: the site failed to build', r.message, 'Retry'],
+          build: ["Couldn't publish: the site didn't build", r.message, 'Try again'],
           setup: ["Hosting isn't set up yet", 'Create the site in Hosting first.', 'Open Hosting'],
-        }[r.reason] || ['Upload to Cloudflare failed', r.message || 'Cloudflare reported an error.', 'Retry'];
+        }[r.reason] || ["Couldn't upload to Cloudflare", r.message || 'Cloudflare reported an error.', 'Try again'];
         const toHosting = m[2] === 'Open Hosting';
-        this.result = { tone: 'bad', text: m[0], sub: m[1], actions: [{ label: m[2], kind: 'dark', fn: () => { this.result = null; if (toHosting) this.go('#hosting'); else this.retrySync(); } }] };
+        this.result = { tone: 'bad', text: m[0], sub: m[1], actions: [{ label: m[2], kind: 'pri', fn: () => { this.result = null; if (toHosting) this.go('#hosting'); else this.retrySync(); } }] };
       } else if (r.result === 'push-failed') {
         const m = {
-          network: ["Couldn't reach GitHub", 'Your changes are saved and still unpublished.', 'Retry'],
-          behind: ['GitHub has newer changes from another device', "They'll be merged with yours.", 'Pull and publish'],
-          auth: ["GitHub didn't accept the sign-in", 'Check the connection in Settings, then retry.', 'Retry'],
-          conflict: ['Your changes clash with newer ones on GitHub', 'Open the folder in a git tool to resolve it, then retry.', 'Retry'],
-          unknown: ['Publishing failed', r.message || 'Git reported an error.', 'Retry'],
+          network: ["Couldn't reach GitHub", "Your changes are kept. Try again when you're back online.", 'Try again'],
+          behind: ['GitHub has newer changes from another device', "They'll be combined with yours.", 'Combine and publish'],
+          auth: ["GitHub didn't accept the sign-in", 'Check GitHub backup in Settings, then try again.', 'Try again'],
+          conflict: ['Your changes clash with newer ones on GitHub', 'Open the folder in a git tool to sort it out, then try again.', 'Try again'],
+          unknown: ["Couldn't publish", r.message || 'Git reported an error.', 'Try again'],
         }[r.reason || 'unknown'];
-        this.result = { tone: r.reason === 'behind' ? 'warn' : 'bad', text: m[0], sub: m[1], actions: [{ label: m[2], kind: 'dark', fn: () => this.retrySync() }] };
+        this.result = { tone: r.reason === 'behind' ? 'warn' : 'bad', text: m[0], sub: m[1], actions: [{ label: m[2], kind: 'pri', fn: () => this.retrySync() }] };
       }
     },
     async retrySync() {
@@ -921,12 +959,15 @@ document.addEventListener('alpine:init', () => {
       if (names.length === 1) return `Update ${names[0]}`;
       return `Update ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     },
+    versionName(h) {
+      return !h.message || /^(init|first version of the portfolio)$/i.test(h.message) ? 'First version' : h.message;
+    },
     revert(h) {
-      this.confirmBar(`Go back to "${h.message}"?`, 'Content returns to that version as unpublished changes. Nothing goes online until you publish.', 'Revert', async () => {
+      this.confirmBar(`Restore the version from ${this.fmtDate(h.date)}?`, 'It comes back as changes you can publish. Nothing changes online until then.', 'Restore', async () => {
         try {
           await api('POST', '/api/revert', { hash: h.hash });
           await this.afterDiscard();
-          this.flash('Reverted. Review and publish when ready.');
+          this.flash("Restored. Publish when you're ready.");
         } catch (e) {
           this.flash(e.message);
         }
@@ -934,19 +975,42 @@ document.addEventListener('alpine:init', () => {
     },
 
     // ---------- maintenance ----------
+    /** Open the maintenance dialog: 'maint-on', 'maint-off' or 'maint-edit'. */
+    openMaint(kind) {
+      this.siteMenu = false;
+      this.maintForm = clone(this.data.status);
+      this.errors = {};
+      this.modal = kind;
+    },
+    async saveMaintMessage() {
+      try {
+        this.data.status = (await api('PUT', '/api/status', { ...this.maintForm, maintenance: this.data.status.maintenance })).data;
+        return true;
+      } catch (e) {
+        if (e.fields) this.errors = Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [`status.${k}`, v]));
+        else this.flash(e.message);
+        return false;
+      }
+    },
+    async confirmMaint() {
+      if (this.modal === 'maint-edit') {
+        if (await this.saveMaintMessage()) {
+          this.modal = null;
+          this.refreshChanges();
+          this.flash(this.data.status.maintenance ? 'Message saved. Publish to show it.' : 'Message saved');
+        }
+        return;
+      }
+      if (this.modal === 'maint-on' && !(await this.saveMaintMessage())) return;
+      this.setMaintenance(this.modal === 'maint-on');
+    },
     async setMaintenance(on) {
       this.modal = null;
       this.busy = 'publishing';
       try {
         const r = await api('POST', '/api/maintenance', { on });
         this.data.status = r.status;
-        if (this.form?.status) {
-          this.form.status.maintenance = r.status.maintenance;
-          const snap = JSON.parse(this.snap);
-          snap.status.maintenance = r.status.maintenance;
-          this.snap = JSON.stringify(snap);
-        }
-        if (r.result === 'published') this.result = { tone: on ? 'warn' : 'ok', text: on ? 'Maintenance mode is live' : 'Your portfolio is back', sub: `Visitors see the change in about a minute.`, actions: [{ label: 'OK', kind: 'ghost', fn: () => (this.result = null) }] };
+        if (r.result === 'published') this.result = { tone: on ? 'warn' : 'ok', text: on ? 'Maintenance is on' : 'Your portfolio is back', sub: 'Visitors see the change in about a minute.', actions: [{ label: 'OK', kind: 'ghost', fn: () => (this.result = null) }] };
         else this.handlePublish(r);
         this.nonce++;
       } catch (e) {
@@ -967,20 +1031,22 @@ document.addEventListener('alpine:init', () => {
       const domain = this.expiry?.domain || (this.data.settings.siteUrl || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'Your domain';
       return { days, text: days < 0 ? `${domain} expired ${-days} day${days === -1 ? '' : 's'} ago` : days === 0 ? `${domain} expires today` : `${domain} expires in ${days} day${days === 1 ? '' : 's'}` };
     },
-    get syncText() {
+    /** The site's state for the top bar: one word on the chip, details in its menu. */
+    get siteStatus() {
       const s = this.sync || {};
-      if (this.lost) return ['The CMS stopped. Open it again from the desktop shortcut.', 'var(--bad)'];
-      if (this.changes.hosted && this.hosting?.lastDeployAt && s.state !== 'pulling') return [`Live · last upload ${this.fmtDate(this.hosting.lastDeployAt)}`, 'var(--ok)'];
-      if (s.state === 'pulling') return ['Getting the latest from GitHub…', 'var(--accent)'];
-      if (s.state === 'offline') return ['Offline · changes are saved on this laptop', '#a0a2a6'];
-      if (s.state === 'error') return ['Last upload failed', 'var(--bad)'];
-      if (!this.data.remote) return ['Not connected to GitHub yet', '#a0a2a6'];
-      if (s.state === 'local') return ['Connected to GitHub · nothing uploaded yet', '#a0a2a6'];
-      return [`Up to date with GitHub${s.at ? ` · ${this.fmtTime(s.at)}` : ''}`, 'var(--ok)'];
+      if (this.lost) return { text: 'CMS stopped', tone: 'bad', title: 'The CMS stopped', detail: 'Open it again from the desktop shortcut.' };
+      const notes = [];
+      if (s.state === 'pulling') notes.push('Getting the latest from GitHub…');
+      if (s.state === 'offline') notes.push("You're offline. Edits are kept on this computer.");
+      if (s.state === 'error') notes.push("The last GitHub backup didn't upload.");
+      if (this.data.status?.maintenance) return { text: 'Maintenance', tone: 'warn', title: 'Maintenance is on', detail: 'Visitors see your short message instead of your portfolio.', notes };
+      if (this.changes.hosted && this.hosting?.lastDeployAt) return { text: 'Live', tone: 'ok', title: 'Your site is live', detail: `Last published ${this.fmtDate(this.hosting.lastDeployAt)}`, notes };
+      if (this.data.remote && this.data.settings?.siteUrl && !this.changes.hosted) return { text: 'Live', tone: 'ok', title: 'Your site is live', detail: 'Published through GitHub.', notes };
+      return { text: 'Not online yet', tone: 'idle', title: 'Not online yet', detail: 'Open Hosting to put your site online. It takes a few minutes and costs nothing.', notes, hosting: true };
     },
     async quit() {
-      if (this.dirty) {
-        this.confirmBar('Quit without saving?', `Your edits to ${this.formName} will be lost.`, 'Quit', () => this.doQuit(), 'Keep editing');
+      if (!(await this.flushSave())) {
+        this.confirmBar("Some edits can't be saved yet", 'Quit anyway and lose them?', 'Quit', () => this.doQuit(), 'Stay');
         this.bar.whenDirty = true;
         return;
       }
@@ -1137,9 +1203,17 @@ document.addEventListener('alpine:init', () => {
     fileName(p) {
       return (p || '').split('/').pop();
     },
+    hostOf(u) {
+      try {
+        return new URL(u).hostname.replace(/^www\./, '');
+      } catch {
+        return u;
+      }
+    },
+    // Character counters only appear near the limit.
     count(s, max) {
       const n = (s || '').length;
-      return { text: `${n} / ${max}`, over: n > max };
+      return { text: n >= max * 0.8 ? `${n} / ${max}` : '', over: n > max };
     },
   }));
 });

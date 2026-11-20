@@ -266,7 +266,8 @@ app.post('/api/publish', async (c) => {
     const { items, ahead } = await gitops.changes();
     const pending = await hosting.undeployed();
     if (!items.length && !ahead && !pending) return ok(c, { result: 'nothing' });
-    if (items.length && (settings.checkBeforePublish || body.forceCheck)) {
+    // Publish always checks the site first.
+    if (items.length) {
       const r = await check();
       if (!r.ok) return ok(c, { result: 'check-failed', check: r });
     }

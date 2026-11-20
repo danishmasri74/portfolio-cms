@@ -35,6 +35,8 @@ The CMS opens at `http://127.0.0.1:4000` with a live preview of the site. The fi
 
 Replace the sample profile, project and experience with your own, then go online.
 
+Edits save as you type, and nothing goes online until you press **Publish** in the bottom bar. **See changes** lists what's waiting, with Undo for each. The chip at the top shows whether your site is live and holds the maintenance switch.
+
 ## Make it yours
 
 Open **Appearance** in the CMS to give the site your own look. The preview updates as you pick:

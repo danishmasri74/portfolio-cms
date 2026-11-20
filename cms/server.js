@@ -16,6 +16,7 @@ import * as preview from './lib/preview.js';
 import * as setup from './lib/setup.js';
 import * as hosting from './lib/hosting.js';
 import * as github from './lib/github.js';
+import * as ai from './lib/ai.js';
 import { checkLinks } from './lib/links.js';
 import { domainExpiry } from './lib/domain.js';
 
@@ -117,7 +118,7 @@ app.get('/api/state', async (c) => {
   });
 });
 
-app.get('/api/changes', async (c) => ok(c, { ...(await gitops.changes()), undeployed: await hosting.undeployed(), hosted: hosting.isConfigured(), busy, sync }));
+app.get('/api/changes', async (c) => ok(c, { ...(await gitops.changes()), undeployed: await hosting.undeployed(), hosted: hosting.isConfigured(), busy, sync, contentStamp: store.contentStamp() }));
 
 // ---------- singles ----------
 const shareImage = () => images.generateShareImage(store.getSingle('profile'), store.getSingle('settings'), store.getSingle('theme'));
@@ -454,6 +455,14 @@ const ghCall = (fn) => async (c) => {
     return fail(c, e.message);
   }
 };
+// ---------- AI assistant (Claude Desktop) ----------
+app.get('/api/ai/desktop', ghCall(() => ai.status()));
+app.post('/api/ai/desktop', ghCall(() => ai.connect()));
+app.delete('/api/ai/desktop', ghCall(() => ai.disconnect()));
+app.get('/api/ai/codex', ghCall(() => ai.codexStatus()));
+app.post('/api/ai/codex', ghCall(() => ai.codexConnect()));
+app.delete('/api/ai/codex', ghCall(() => ai.codexDisconnect()));
+
 app.get('/api/github', ghCall(() => github.status()));
 app.post('/api/github/install', ghCall(async () => {
   const r = await github.installGh();

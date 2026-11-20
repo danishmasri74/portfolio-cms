@@ -1,5 +1,5 @@
 // Reading and writing content files, with validation.
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { schemas, fieldErrors, slugify } from '../../schema/content.js';
 import { CONTENT, readCollection, readSingle } from '../../schema/read.js';
@@ -101,6 +101,24 @@ export function saveWriteup(col, slug, text) {
   const f = entryPath(col, slug, 'md');
   if (!text.trim()) rmSync(f, { force: true });
   else writeFileSync(f, text.replace(/\r\n/g, '\n').trimEnd() + '\n', 'utf8');
+}
+
+/** A fingerprint of the content files (names and times changed), so the CMS notices edits made elsewhere. */
+export function contentStamp() {
+  let s = '';
+  const walk = (dir) => {
+    for (const f of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, f.name);
+      if (f.isDirectory()) walk(p);
+      else s += `${p}:${statSync(p).mtimeMs};`;
+    }
+  };
+  try {
+    walk(CONTENT);
+  } catch {}
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return String(h);
 }
 
 /** All text in content, used to find which uploaded files are still referenced. */

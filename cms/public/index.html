@@ -603,6 +603,28 @@
             <button class="btn sm" type="button" style="justify-self:start" @click="go('#github')" x-text="data.remote ? 'Change' : 'Set up GitHub backup'"></button>
           </div>
 
+          <div class="grp">AI assistant</div>
+          <div class="f">
+            <span class="help" style="font-size:13px;color:var(--body)">Ask Claude or Codex to add projects, rewrite your bio or change the look. Their edits show up here as changes, and nothing goes live until you publish.</span>
+            <div class="aiapps">
+              <div class="aiapp">
+                <b>Claude Desktop</b>
+                <template x-if="aiDesktop?.connected"><span class="okline">✓ Connected</span></template>
+                <template x-if="aiDesktop?.connected"><button class="btn sm ghost" type="button" @click="disconnectClaude()">Disconnect</button></template>
+                <template x-if="aiDesktop && !aiDesktop.connected && aiDesktop.installed"><button class="btn sm" type="button" @click="connectClaude()" x-text="aiDesktop.otherFolder ? 'Switch to this folder' : 'Connect'"></button></template>
+                <template x-if="aiDesktop && !aiDesktop.installed"><a class="btn sm ghost" href="https://claude.ai/download" target="_blank" rel="noopener">Get it ↗</a></template>
+              </div>
+              <div class="aiapp">
+                <b>Codex</b>
+                <template x-if="aiCodex?.connected"><span class="okline">✓ Connected</span></template>
+                <template x-if="aiCodex?.connected"><button class="btn sm ghost" type="button" @click="disconnectCodex()">Disconnect</button></template>
+                <template x-if="aiCodex && !aiCodex.connected && aiCodex.installed"><button class="btn sm" type="button" @click="connectCodex()" x-text="aiCodex.otherFolder ? 'Switch to this folder' : 'Connect'"></button></template>
+                <template x-if="aiCodex && !aiCodex.installed"><a class="btn sm ghost" href="https://developers.openai.com/codex" target="_blank" rel="noopener">Get it ↗</a></template>
+              </div>
+            </div>
+            <span class="help">Claude Code: open this folder and allow the portfolio tools when asked. Other MCP apps work too: run <code>node cms/mcp.js</code>.</span>
+          </div>
+
           <details class="adv">
             <summary>Advanced <span>Folder, branch, preview port</span></summary>
             <div class="fg" style="margin-top:14px">

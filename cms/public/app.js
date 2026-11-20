@@ -2,6 +2,9 @@
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// When this window last saved something successfully, so its own saves aren't mistaken for outside edits.
+let ownWriteAt = 0;
+const NOT_CONTENT = new RegExp('^/api/(ping|bye|open|check|theme/preview|preview/restart|quit)(/|$)');
 async function api(method, url, body) {
   const opts = { method, headers: {} };
   if (body instanceof FormData) opts.body = body;
@@ -17,6 +20,8 @@ async function api(method, url, body) {
   }
   const json = await res.json().catch(() => ({ ok: false, message: 'Unexpected response.' }));
   if (!json.ok) throw Object.assign(new Error(json.message || 'Something went wrong.'), { fields: json.fields || null, reason: json.reason || null, status: res.status });
+  // Calls that don't change content (keep-alive pings, previews, checks) don't count.
+  if (method !== 'GET' && !NOT_CONTENT.test(url)) ownWriteAt = Date.now();
   return json;
 }
 
@@ -145,6 +150,29 @@ document.addEventListener('alpine:init', () => {
       });
     },
     lost: false,
+    contentStamp: null,
+    stampAt: 0,
+    /** Show edits made outside this window, without throwing away anything typed here. */
+    async outsideEdit() {
+      if (this.view === 'setup') return;
+      if (this.form && (this.dirty || this.saving)) {
+        this.bar = {
+          tone: 'warn',
+          text: 'This page changed elsewhere',
+          sub: 'Your edits here will overwrite it when they save.',
+          actions: [
+            { label: 'Keep my edits', kind: 'ghost', fn: () => (this.bar = null) },
+            { label: 'Reload', kind: 'pri', fn: async () => { this.bar = null; this.resetDirty(); await this.loadState(); await this.loadView(); this.nonce++; } },
+          ],
+        };
+        return;
+      }
+      clearTimeout(this.autoTimer);
+      await this.loadState();
+      if (!['hosting', 'domain', 'github', 'history'].includes(this.view)) await this.loadView();
+      this.nonce++;
+      this.flash('Updated by your AI assistant');
+    },
     expiry: null,
     async loadExpiry(refresh = false) {
       try {
@@ -173,8 +201,14 @@ document.addEventListener('alpine:init', () => {
 
     async refreshChanges() {
       try {
+        const asked = Date.now();
         const c = await api('GET', '/api/changes');
         this.changes = { items: c.items, ahead: c.ahead, hasHead: c.hasHead, undeployed: c.undeployed, hosted: c.hosted };
+        // Content changed, and this window saved nothing since the last look: an AI assistant (or another tool) edited it.
+        const outside = this.contentStamp && c.contentStamp !== this.contentStamp && ownWriteAt < this.stampAt;
+        this.contentStamp = c.contentStamp;
+        this.stampAt = asked;
+        if (outside) this.outsideEdit();
         this.busy = c.busy;
         this.sync = c.sync;
       } catch {}
@@ -286,6 +320,8 @@ document.addEventListener('alpine:init', () => {
           this.data.remote = st.remote;
           this.form = { settings: s.data };
           this.portInput = st.previewPort;
+          api('GET', '/api/ai/desktop').then((r) => (this.aiDesktop = r)).catch(() => {});
+          api('GET', '/api/ai/codex').then((r) => (this.aiCodex = r)).catch(() => {});
         } else if (this.view === 'history') {
           this.history = (await api('GET', '/api/history')).items;
         } else if (this.view === 'setup') {
@@ -1158,6 +1194,46 @@ document.addEventListener('alpine:init', () => {
       await api('POST', '/api/setup/start-hidden', { hidden: true }).catch(() => {});
       this.data.startHidden = true;
       this.go('#profile');
+    },
+
+    // ---------- AI assistant ----------
+    aiDesktop: null,
+    connectClaude() {
+      this.confirmBar('Connect to Claude Desktop?', "Adds this portfolio to Claude Desktop's settings. Restart Claude Desktop afterwards.", 'Connect', async () => {
+        try {
+          this.aiDesktop = await api('POST', '/api/ai/desktop');
+          this.flash('Connected. Restart Claude Desktop to use it.');
+        } catch (e) {
+          this.flash(e.message);
+        }
+      });
+    },
+    aiCodex: null,
+    connectCodex() {
+      this.confirmBar('Connect to Codex?', "Adds this portfolio to Codex's settings, for the Codex app, CLI and IDE extension. Restart Codex afterwards.", 'Connect', async () => {
+        try {
+          this.aiCodex = await api('POST', '/api/ai/codex');
+          this.flash('Connected. Restart Codex to use it.');
+        } catch (e) {
+          this.flash(e.message);
+        }
+      });
+    },
+    async disconnectCodex() {
+      try {
+        this.aiCodex = await api('DELETE', '/api/ai/codex');
+        this.flash('Disconnected from Codex');
+      } catch (e) {
+        this.flash(e.message);
+      }
+    },
+    async disconnectClaude() {
+      try {
+        this.aiDesktop = await api('DELETE', '/api/ai/desktop');
+        this.flash('Disconnected from Claude Desktop');
+      } catch (e) {
+        this.flash(e.message);
+      }
     },
 
     // ---------- GitHub backup ----------

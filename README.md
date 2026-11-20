@@ -30,6 +30,16 @@ The share image for LinkedIn, WhatsApp and Discord follows your colours too.
 
 **Sections** lets you rename Work, Experience and Toolkit (say "Projects" and "Education"), drag them into any order, and add your own: a short text like "Now", or a list like Awards or Certifications. Add a **headline** on the Profile page for one big line above your work.
 
+## Use it with AI
+
+Ask Claude or Codex to do the typing: "add my new project, here's the GitHub link", "make my bio sound less formal", "switch to the warm palette with serif fonts".
+
+- **Claude Desktop** or **Codex** (the app, CLI or IDE extension): in the CMS, open **Settings → AI assistant** and press **Connect** next to it, then restart that app.
+- **Claude Code:** open this folder in it and allow the **portfolio** tools when asked.
+- **Other apps that support MCP** work too: point them at `node cms/mcp.js` in this folder.
+
+The AI edits your content through the same rules as the CMS. Its edits show up under **See changes**, where you can undo any of them, and **nothing goes live until you press Publish**. It can't publish, change hosting, or upload photos. `AGENTS.md` explains the folder to AI tools.
+
 ## For developers
 
 ```

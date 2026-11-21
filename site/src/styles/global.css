@@ -185,7 +185,8 @@ main section + section { margin-top: 52px; }
 .writeup h1 { font-family: var(--display); font-size: 38px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin: 28px 0 10px; text-wrap: balance; }
 .writeup .meta { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .writeup .meta a { color: var(--accent); text-decoration: none; }
-.writeup .cover { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 8px; margin: 32px 0 8px; background: var(--surface); }
+/* The whole screenshot, at its own shape. Very tall ones are capped and shown in full (letterboxed), never cropped. */
+.writeup .cover { width: 100%; height: auto; max-height: 80vh; object-fit: contain; border-radius: 8px; margin: 32px 0 8px; background: var(--surface); }
 .prose { font-size: 17px; line-height: 1.7; color: var(--body); margin-top: 24px; }
 .prose h2 { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--text); margin: 40px 0 8px; letter-spacing: -0.01em; }
 .prose h3 { font-family: var(--display); font-size: 18px; font-weight: 600; color: var(--text); margin: 28px 0 6px; }
@@ -193,7 +194,7 @@ main section + section { margin-top: 52px; }
 .prose ul, .prose ol { padding-left: 22px; }
 .prose li + li { margin-top: 4px; }
 .prose a { color: var(--accent); text-underline-offset: 3px; }
-.prose img { border-radius: 8px; margin: 24px 0; }
+.prose img { height: auto; border-radius: 8px; margin: 24px 0; }
 .prose code { font-family: var(--mono); font-size: 0.88em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
 .prose pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 14px; }
 .prose pre code { background: none; padding: 0; }
